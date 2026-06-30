@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { emptyReport, GlofoxSnapshot, variantKey } from "../types";
-import { ingestSnapshot, recordDelivery } from "../ledger";
+import { ingestSnapshot, recordDelivery, recordAdjustment } from "../ledger";
 import { computeAudit, summarizeAudit } from "../reconcile";
 
 function snap(capturedAt: string, stock: number, sales: number[] = []): GlofoxSnapshot {
@@ -83,6 +83,29 @@ describe("computeAudit — spójność księgowa (bookDiscrepancy)", () => {
     expect(line.expectedFromBook).toBe(120); // 100 + 50 - 30
     expect(line.bookDiscrepancy).toBe(-2); // 118 - 120
     expect(line.soldInWindow).toBe(30); // 10 + 20
+  });
+
+  it("uwzględnia korektę (ADJUSTMENT) w oczekiwanym stanie", () => {
+    let r = emptyReport();
+    r = ingestSnapshot(r, snap("2026-06-01T20:00:00.000Z", 100));
+    r = recordDelivery(r, {
+      productId: "P1",
+      presentationId: "V1",
+      qty: 50,
+      at: "2026-06-05T12:00:00.000Z",
+    });
+    // Korekta: cofnięcie błędnej dostawy −50 w oknie.
+    r = recordAdjustment(r, {
+      productId: "P1",
+      presentationId: "V1",
+      qty: -50,
+      at: "2026-06-06T12:00:00.000Z",
+    });
+    r = ingestSnapshot(r, snap("2026-06-10T20:00:00.000Z", 70, [10, 20]));
+
+    const line = computeAudit(r, "2026-06-10T20:00:00.000Z", new Map(), 0).lines[0];
+    expect(line.expectedFromBook).toBe(70); // 100 + 50 - 50 - 30
+    expect(line.bookDiscrepancy).toBe(0); // 70 - 70
   });
 });
 

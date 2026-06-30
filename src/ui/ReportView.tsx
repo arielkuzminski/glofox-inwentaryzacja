@@ -1,10 +1,29 @@
+import { useMemo } from "react";
 import { ReportState } from "../model/types";
 import { summarizeAudit } from "../model/reconcile";
+import { exportAuditCsv } from "../storage/file";
+import { useSort } from "./useSort";
 
 export function ReportView({ report }: { report: ReportState }) {
-  const audits = [...report.audits].sort((a, b) =>
-    (b.closedAt ?? b.openedAt).localeCompare(a.closedAt ?? a.openedAt),
+  const audits = useMemo(
+    () =>
+      [...report.audits].sort((a, b) =>
+        (b.closedAt ?? b.openedAt).localeCompare(a.closedAt ?? a.openedAt),
+      ),
+    [report.audits],
   );
+  const summaries = useMemo(
+    () => audits.map((a) => ({ audit: a, summary: summarizeAudit(a) })),
+    [audits],
+  );
+  const auditsSort = useSort(summaries, {
+    closedAt: (x) => x.audit.closedAt ?? "",
+    snapshot: (x) => x.audit.snapshotSource,
+    counted: (x) => x.summary.countedVariants,
+    flagged: (x) => x.summary.flaggedVariants,
+    mankoUnits: (x) => x.summary.totalMankoUnits,
+    mankoValue: (x) => x.summary.totalMankoValue,
+  });
 
   return (
     <>
@@ -35,17 +54,47 @@ export function ReportView({ report }: { report: ReportState }) {
           <table>
             <thead>
               <tr>
-                <th>Zamknięty</th>
-                <th>Snapshot</th>
-                <th className="num">Policzone</th>
-                <th className="num">Oznaczone</th>
-                <th className="num">Manko (szt)</th>
-                <th className="num">Wartość (zł)</th>
+                <th
+                  className="sortable"
+                  onClick={() => auditsSort.toggle("closedAt")}
+                >
+                  Zamknięty{auditsSort.arrow("closedAt")}
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => auditsSort.toggle("snapshot")}
+                >
+                  Snapshot{auditsSort.arrow("snapshot")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => auditsSort.toggle("counted")}
+                >
+                  Policzone{auditsSort.arrow("counted")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => auditsSort.toggle("flagged")}
+                >
+                  Oznaczone{auditsSort.arrow("flagged")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => auditsSort.toggle("mankoUnits")}
+                >
+                  Manko (szt){auditsSort.arrow("mankoUnits")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => auditsSort.toggle("mankoValue")}
+                >
+                  Wartość (zł){auditsSort.arrow("mankoValue")}
+                </th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {audits.map((a) => {
-                const s = summarizeAudit(a);
+              {auditsSort.sorted.map(({ audit: a, summary: s }) => {
                 return (
                   <tr key={a.id}>
                     <td>
@@ -65,6 +114,15 @@ export function ReportView({ report }: { report: ReportState }) {
                     </td>
                     <td className={`num ${s.totalMankoValue ? "flag" : ""}`}>
                       {s.totalMankoValue.toFixed(2)}
+                    </td>
+                    <td className="num">
+                      <button
+                        className="ghost"
+                        style={{ padding: "2px 8px" }}
+                        onClick={() => exportAuditCsv(a)}
+                      >
+                        CSV
+                      </button>
                     </td>
                   </tr>
                 );

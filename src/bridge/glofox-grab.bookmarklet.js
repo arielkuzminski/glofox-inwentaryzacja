@@ -21,10 +21,20 @@
   // listview działa jak infinity scroll → duży pageSize pobiera wszystko naraz.
   const STOCK_URL = "https://app.glofox.com/products/listview/1/9999/null/1";
 
-  // Sprzedaż: drilldown po pozycjach. Wymaga zakresu dat i branchId w ścieżce.
-  // USTAW okres = od poprzedniego snapshotu do dziś — inaczej rozbieżność księgowa
-  // (prev + dostawy − sprzedaż) będzie liczona na złym oknie.
-  const SALES_DAYS_BACK = 31;
+  // Sprzedaż: drilldown po pozycjach. Okno = od poprzedniego snapshotu do dziś —
+  // inaczej rozbieżność księgowa (prev + dostawy − sprzedaż) liczy się na złym oknie.
+  // Pytamy o liczbę dni (domyślnie szeroko), a zakres trafia do snapshotu, żeby panel
+  // mógł ostrzec, gdy okno nie pokrywa przerwy między snapshotami.
+  const DEFAULT_DAYS_BACK = 60;
+  let SALES_DAYS_BACK = DEFAULT_DAYS_BACK;
+  {
+    const ans = prompt(
+      "Sprzedaż — ile dni wstecz pobrać? (okno musi pokryć czas od ostatniego snapshotu)",
+      String(DEFAULT_DAYS_BACK),
+    );
+    const n = ans === null ? DEFAULT_DAYS_BACK : parseInt(ans, 10);
+    if (!Number.isNaN(n) && n > 0) SALES_DAYS_BACK = n;
+  }
 
   // --- Auth: token z ŻYWEGO ruchu Glofox -------------------------------
   // Glofox trzyma świeży token w pamięci (refresh flow); localStorage bywa
@@ -237,13 +247,13 @@
   function ymd(d) {
     return d.toISOString().slice(0, 10);
   }
+  const now = Date.now();
+  const salesFrom = ymd(new Date(now - SALES_DAYS_BACK * 86400000));
+  const salesTo = ymd(new Date(now + 86400000)); // +1 dzień, by objąć dziś
   function salesUrl() {
-    const now = Date.now();
-    const start = ymd(new Date(now - SALES_DAYS_BACK * 86400000));
-    const end = ymd(new Date(now + 86400000)); // +1 dzień, by objąć dziś
     return (
       `https://app.glofox.com/data-api/v1/studios/${auth.branchId}` +
-      `/sales/drilldown-by-item-net-sales?date_start=${start}&date_end=${end}` +
+      `/sales/drilldown-by-item-net-sales?date_start=${salesFrom}&date_end=${salesTo}` +
       "&revenue_stream_type=Products"
     );
   }
@@ -261,6 +271,8 @@
       branchId: auth.branchId,
       products,
       sales,
+      salesFrom,
+      salesTo,
     };
 
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {

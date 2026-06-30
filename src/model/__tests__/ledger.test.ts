@@ -6,6 +6,8 @@ import {
   snapshotStockMap,
   sumDeltasInWindow,
   recordDelivery,
+  recordPhysicalCount,
+  physicalCountMap,
 } from "../ledger";
 
 function snap(capturedAt: string): GlofoxSnapshot {
@@ -63,6 +65,41 @@ describe("snapshotMetas / snapshotStockMap", () => {
     const stock = snapshotStockMap(r.ledger, "2026-06-01T20:00:00.000Z");
     expect(stock.get("P1::V1")).toBe(100);
     expect(stock.get("P1::V2")).toBe(40);
+  });
+});
+
+describe("recordPhysicalCount / physicalCountMap", () => {
+  const SRC = "2026-06-01T20:00:00.000Z";
+
+  it("zapisuje policzoną ilość jako PHYSICAL_COUNT przypiętą do snapshotu", () => {
+    let r = emptyReport();
+    r = recordPhysicalCount(r, {
+      productId: "P1",
+      presentationId: "V1",
+      count: 7,
+      snapshotSource: SRC,
+    });
+    const ev = r.ledger.find((e) => e.type === "PHYSICAL_COUNT");
+    expect(ev?.qty).toBe(7);
+    expect(ev?.source).toBe(SRC);
+    expect(physicalCountMap(r.ledger, SRC).get("P1::V1")).toBe(7);
+  });
+
+  it("najnowszy wpis wygrywa (korekta), ale ślad zostaje w ledgerze", () => {
+    let r = emptyReport();
+    r = recordPhysicalCount(r, { productId: "P1", presentationId: "V1", count: 7, snapshotSource: SRC });
+    r = recordPhysicalCount(r, { productId: "P1", presentationId: "V1", count: 9, snapshotSource: SRC });
+    expect(physicalCountMap(r.ledger, SRC).get("P1::V1")).toBe(9);
+    expect(r.ledger.filter((e) => e.type === "PHYSICAL_COUNT")).toHaveLength(2);
+  });
+
+  it("rozdziela liczenia per snapshot (sesja)", () => {
+    const OTHER = "2026-07-01T20:00:00.000Z";
+    let r = emptyReport();
+    r = recordPhysicalCount(r, { productId: "P1", presentationId: "V1", count: 7, snapshotSource: SRC });
+    r = recordPhysicalCount(r, { productId: "P1", presentationId: "V1", count: 3, snapshotSource: OTHER });
+    expect(physicalCountMap(r.ledger, SRC).get("P1::V1")).toBe(7);
+    expect(physicalCountMap(r.ledger, OTHER).get("P1::V1")).toBe(3);
   });
 });
 

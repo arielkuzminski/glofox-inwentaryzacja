@@ -49,6 +49,24 @@ d("UI na prawdziwym snapshocie", () => {
     if (someStaff) expect(container.textContent).toContain(someStaff);
   });
 
+  it("SORTOWANIE: klik nagłówka 'Stan Glofox' sortuje tabelę stanu magazynowego", () => {
+    const { container, getByText } = render(<SnapshotView report={report} />);
+    const stockColumn = () =>
+      [...container.querySelectorAll("table")[1].querySelectorAll("tbody tr td:last-child")].map(
+        (td) => Number(td.textContent),
+      );
+    const before = stockColumn();
+
+    fireEvent.click(getByText("Stan Glofox"));
+    const afterAsc = stockColumn();
+    expect(afterAsc).not.toEqual(before);
+    expect(afterAsc).toEqual([...afterAsc].sort((a, b) => a - b));
+
+    fireEvent.click(getByText(/^Stan Glofox/));
+    const afterDesc = stockColumn();
+    expect(afterDesc).toEqual([...afterAsc].reverse());
+  });
+
   it("AUDYT: po wpisaniu spisu liczy manko i jego wartość na żywo", () => {
     const { container, getByPlaceholderText } = render(
       <AuditView report={report} update={() => {}} />,

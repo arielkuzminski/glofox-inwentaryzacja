@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useReport } from "./state/store";
+import { useReport, type PersistStatus } from "./state/store";
 import { ingestSnapshot } from "./model/ledger";
 import {
   exportReport,
@@ -10,20 +10,32 @@ import {
 } from "./storage/file";
 import { clearDraft } from "./storage/local";
 import { emptyReport } from "./model/types";
+import { BridgeView } from "./ui/BridgeView";
 import { SnapshotView } from "./ui/SnapshotView";
 import { DeliveriesView } from "./ui/DeliveriesView";
 import { SalesView } from "./ui/SalesView";
 import { AuditView } from "./ui/AuditView";
 import { ReportView } from "./ui/ReportView";
 
-type Tab = "snapshot" | "deliveries" | "sales" | "audit" | "report";
+type Tab = "bridge" | "snapshot" | "deliveries" | "sales" | "audit" | "report";
 
 export function App() {
-  const { report, update, replace } = useReport();
+  const { report, update, replace, persist } = useReport();
   const [tab, setTab] = useState<Tab>("snapshot");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function runPersist(action: () => Promise<void>, ok: string) {
+    setErr(null);
+    setMsg(null);
+    try {
+      await action();
+      setMsg(ok);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     setErr(null);
@@ -62,17 +74,57 @@ export function App() {
     <div className="app">
       <h1>Glofox — Inwentaryzacja</h1>
       <p className="subtitle">
-        Kontrola ubytków: manko = stan Glofox − spis z natury. Bez backendu —
-        kanon to plik JSON.
+        Kontrola ubytków: manko = stan Glofox − spis z natury. Dane zapisują się
+        same do wybranego pliku — bez ręcznego eksportu/importu.
       </p>
 
       <div className="panel">
-        <div className="row">
+        <div className="row" style={{ alignItems: "center" }}>
+          <PersistBadge persist={persist} />
+          {persist.status === "connected" ? (
+            <button
+              className="ghost"
+              onClick={() =>
+                runPersist(persist.disconnect, "Odłączono plik — dane zostają w przeglądarce.")
+              }
+            >
+              Odłącz plik
+            </button>
+          ) : persist.status === "needs-permission" ? (
+            <button
+              onClick={() =>
+                runPersist(persist.reconnect, "Wznowiono auto-zapis do pliku.")
+              }
+            >
+              Wznów zapis do pliku
+            </button>
+          ) : persist.status === "disconnected" ? (
+            <>
+              <button
+                onClick={() =>
+                  runPersist(persist.connectNew, "Utworzono plik danych — auto-zapis włączony.")
+                }
+              >
+                Utwórz plik danych
+              </button>
+              <button
+                className="ghost"
+                onClick={() =>
+                  runPersist(persist.connectExisting, "Wczytano plik danych — auto-zapis włączony.")
+                }
+              >
+                Otwórz plik danych
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        <div className="row" style={{ marginTop: 10 }}>
           <button onClick={() => fileRef.current?.click()}>
-            Importuj plik (snapshot / raport)
+            Importuj snapshot z bookmarkletu
           </button>
           <button className="ghost" onClick={() => exportReport(report)}>
-            Eksportuj raport (JSON)
+            Eksportuj kopię (JSON)
           </button>
           <button className="ghost" onClick={onReset}>
             Wyczyść stan
@@ -90,6 +142,12 @@ export function App() {
       </div>
 
       <div className="tabs">
+        <button
+          className={`tab ${tab === "bridge" ? "active" : ""}`}
+          onClick={() => setTab("bridge")}
+        >
+          Pobierz dane
+        </button>
         <button
           className={`tab ${tab === "snapshot" ? "active" : ""}`}
           onClick={() => setTab("snapshot")}
@@ -122,6 +180,7 @@ export function App() {
         </button>
       </div>
 
+      {tab === "bridge" && <BridgeView />}
       {tab === "snapshot" && <SnapshotView report={report} />}
       {tab === "deliveries" && (
         <DeliveriesView report={report} update={update} />
@@ -130,5 +189,33 @@ export function App() {
       {tab === "audit" && <AuditView report={report} update={update} />}
       {tab === "report" && <ReportView report={report} />}
     </div>
+  );
+}
+
+function PersistBadge({
+  persist,
+}: {
+  persist: { status: PersistStatus; fileName: string | null };
+}) {
+  const map: Record<PersistStatus, { text: string; cls: string }> = {
+    connected: {
+      text: `Zapisywane do ${persist.fileName ?? "pliku"} ✓`,
+      cls: "ok",
+    },
+    "needs-permission": {
+      text: `Plik ${persist.fileName ?? ""} czeka na zgodę →`,
+      cls: "warn",
+    },
+    disconnected: { text: "Tylko w przeglądarce — podłącz plik", cls: "warn" },
+    unsupported: {
+      text: "Ta przeglądarka nie wspiera auto-zapisu (użyj import/eksport)",
+      cls: "muted",
+    },
+  };
+  const { text, cls } = map[persist.status];
+  return (
+    <span className={`pill ${cls}`} style={{ marginRight: 8 }}>
+      {text}
+    </span>
   );
 }

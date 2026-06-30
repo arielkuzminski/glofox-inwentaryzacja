@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ReportState } from "../model/types";
 import { snapshotMetas, snapshotStockMap } from "../model/ledger";
 import { matchesQuery, variantRows } from "../state/store";
+import { useSort } from "./useSort";
 
 export function SnapshotView({ report }: { report: ReportState }) {
   const metas = snapshotMetas(report.ledger);
@@ -13,6 +14,17 @@ export function SnapshotView({ report }: { report: ReportState }) {
     () => allRows.filter((r) => matchesQuery(r.productName, q)),
     [allRows, q],
   );
+
+  const metasSort = useSort(metas, {
+    at: (m) => m.at,
+    variants: (m) => snapshotStockMap(report.ledger, m.source).size,
+  });
+  const rowsSort = useSort(rows, {
+    productName: (r) => r.productName,
+    presentationName: (r) => r.presentationName,
+    unitPrice: (r) => r.unitPrice,
+    stock: (r) => stock?.get(`${r.productId}::${r.presentationId}`) ?? -1,
+  });
 
   return (
     <>
@@ -28,12 +40,22 @@ export function SnapshotView({ report }: { report: ReportState }) {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Czas zrzutu (capturedAt)</th>
-                <th className="num">Warianty</th>
+                <th
+                  className="sortable"
+                  onClick={() => metasSort.toggle("at")}
+                >
+                  Czas zrzutu (capturedAt){metasSort.arrow("at")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => metasSort.toggle("variants")}
+                >
+                  Warianty{metasSort.arrow("variants")}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {metas.map((m, i) => (
+              {metasSort.sorted.map((m, i) => (
                 <tr key={m.source}>
                   <td>{i + 1}</td>
                   <td>
@@ -71,14 +93,34 @@ export function SnapshotView({ report }: { report: ReportState }) {
           <table>
             <thead>
               <tr>
-                <th>Produkt</th>
-                <th>Wariant</th>
-                <th className="num">Cena</th>
-                <th className="num">Stan Glofox</th>
+                <th
+                  className="sortable"
+                  onClick={() => rowsSort.toggle("productName")}
+                >
+                  Produkt{rowsSort.arrow("productName")}
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => rowsSort.toggle("presentationName")}
+                >
+                  Wariant{rowsSort.arrow("presentationName")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => rowsSort.toggle("unitPrice")}
+                >
+                  Cena{rowsSort.arrow("unitPrice")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => rowsSort.toggle("stock")}
+                >
+                  Stan Glofox{rowsSort.arrow("stock")}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rowsSort.sorted.map((r) => (
                 <tr key={`${r.productId}::${r.presentationId}`}>
                   <td>{r.productName}</td>
                   <td>{r.presentationName}</td>

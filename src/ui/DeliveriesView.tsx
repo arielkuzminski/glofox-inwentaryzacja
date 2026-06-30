@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { ReportState } from "../model/types";
-import { recordDelivery } from "../model/ledger";
+import { recordDelivery, recordAdjustment } from "../model/ledger";
 import { matchesQuery, variantRows, VariantRow } from "../state/store";
+import { useSort } from "./useSort";
 
 export function DeliveriesView({
   report,
@@ -26,12 +27,45 @@ export function DeliveriesView({
     .filter((e) => e.type === "DELIVERY")
     .sort((a, b) => b.at.localeCompare(a.at));
 
+  const adjustments = report.ledger
+    .filter((e) => e.type === "ADJUSTMENT")
+    .sort((a, b) => b.at.localeCompare(a.at));
+
+  function voidDelivery(d: (typeof deliveries)[number]) {
+    if (
+      !confirm(
+        `Cofnąć dostawę +${d.qty} (${nameFor(d.productId, d.presentationId)})? ` +
+          "Dopisze korektę −" +
+          d.qty +
+          " (ślad audytu zostaje).",
+      )
+    )
+      return;
+    update((rep) =>
+      recordAdjustment(rep, {
+        productId: d.productId,
+        presentationId: d.presentationId,
+        qty: -d.qty,
+        at: new Date().toISOString(),
+        unitPrice: d.unitPrice,
+        note: `korekta: cofnięcie dostawy${d.note ? ` (${d.note})` : ""}`,
+      }),
+    );
+  }
+
   function nameFor(productId: string, presentationId: string) {
     const r = rows.find(
       (x) => x.productId === productId && x.presentationId === presentationId,
     );
     return r ? r.productName : presentationId;
   }
+
+  const deliveriesSort = useSort(deliveries, {
+    at: (d) => d.at,
+    name: (d) => nameFor(d.productId, d.presentationId),
+    qty: (d) => d.qty,
+    note: (d) => d.note ?? "",
+  });
 
   function add() {
     if (!picked || !qty) return;
@@ -142,25 +176,83 @@ export function DeliveriesView({
           <table>
             <thead>
               <tr>
-                <th>Data</th>
-                <th>Produkt</th>
-                <th className="num">Ilość</th>
-                <th>Notatka</th>
+                <th
+                  className="sortable"
+                  onClick={() => deliveriesSort.toggle("at")}
+                >
+                  Data{deliveriesSort.arrow("at")}
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => deliveriesSort.toggle("name")}
+                >
+                  Produkt{deliveriesSort.arrow("name")}
+                </th>
+                <th
+                  className="num sortable"
+                  onClick={() => deliveriesSort.toggle("qty")}
+                >
+                  Ilość{deliveriesSort.arrow("qty")}
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => deliveriesSort.toggle("note")}
+                >
+                  Notatka{deliveriesSort.arrow("note")}
+                </th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {deliveries.map((d) => (
+              {deliveriesSort.sorted.map((d) => (
                 <tr key={d.id}>
                   <td>{new Date(d.at).toLocaleDateString("pl-PL")}</td>
                   <td>{nameFor(d.productId, d.presentationId)}</td>
                   <td className="num">+{d.qty}</td>
                   <td className="muted">{d.note ?? ""}</td>
+                  <td className="num">
+                    <button
+                      className="ghost"
+                      style={{ padding: "2px 8px" }}
+                      onClick={() => voidDelivery(d)}
+                    >
+                      cofnij
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {adjustments.length > 0 && (
+        <div className="panel">
+          <h2>Korekty ({adjustments.length})</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Produkt</th>
+                <th className="num">Korekta</th>
+                <th>Notatka</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adjustments.map((a) => (
+                <tr key={a.id}>
+                  <td>{new Date(a.at).toLocaleDateString("pl-PL")}</td>
+                  <td>{nameFor(a.productId, a.presentationId)}</td>
+                  <td className={`num ${a.qty < 0 ? "flag" : ""}`}>
+                    {a.qty > 0 ? `+${a.qty}` : a.qty}
+                  </td>
+                  <td className="muted">{a.note ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

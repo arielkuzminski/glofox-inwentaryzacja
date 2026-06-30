@@ -5,3 +5,4 @@ tsconfig.tsbuildinfo
 *.local
 .DS_Store
 .vite
+src/bridge/bookmarklet.generated.ts

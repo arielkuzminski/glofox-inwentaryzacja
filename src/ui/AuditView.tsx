@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
-import { ReportState } from "../model/types";
-import { snapshotMetas } from "../model/ledger";
+import { useMemo, useRef, useState } from "react";
+import { ReportState, variantKey } from "../model/types";
+import { snapshotMetas, physicalCountMap, recordPhysicalCount } from "../model/ledger";
 import { computeAudit, summarizeAudit } from "../model/reconcile";
 import { matchesQuery } from "../state/store";
+import { exportAuditCsv } from "../storage/file";
+import { useSort } from "./useSort";
 
 export function AuditView({
   report,
@@ -15,26 +17,58 @@ export function AuditView({
   const latest = metas[metas.length - 1];
   const [source, setSource] = useState(latest?.source ?? "");
   const [tolerance, setTolerance] = useState("0");
-  const [counts, setCounts] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [onlyFlagged, setOnlyFlagged] = useState(false);
   const [onlyCounted, setOnlyCounted] = useState(false);
+  const [plusOne, setPlusOne] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
 
-  const physicalCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const [k, v] of Object.entries(counts)) {
+  // Bufor aktualnie edytowanego pola — commit (Enter/blur) zapisuje do ledgera.
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const scanRef = useRef<HTMLInputElement>(null);
+  const inputRefs = useRef(new Map<string, HTMLInputElement>());
+
+  // Źródło prawdy spisu = ledger (auto-zapis do pliku, przeżywa F5).
+  const ledgerCounts = useMemo(
+    () => (source ? physicalCountMap(report.ledger, source) : new Map<string, number>()),
+    [report.ledger, source],
+  );
+  // Do liczenia na żywo nakładamy niezatwierdzony bufor na wartości z ledgera.
+  const effectiveCounts = useMemo(() => {
+    const m = new Map(ledgerCounts);
+    for (const [k, v] of Object.entries(draft)) {
       if (v.trim() !== "" && !Number.isNaN(Number(v))) m.set(k, Number(v));
     }
     return m;
-  }, [counts]);
+  }, [ledgerCounts, draft]);
 
   const audit = useMemo(() => {
     if (!source) return null;
-    return computeAudit(report, source, physicalCounts, Number(tolerance) || 0);
-  }, [report, source, physicalCounts, tolerance]);
+    return computeAudit(report, source, effectiveCounts, Number(tolerance) || 0);
+  }, [report, source, effectiveCounts, tolerance]);
 
   const stats = audit ? summarizeAudit(audit) : null;
+  const totalVariants = audit ? audit.lines.length : 0;
+
+  // Ostrzeżenie: czy okno sprzedaży snapshotu pokrywa przerwę od poprzedniego snapshotu?
+  const windowWarn = useMemo(() => {
+    if (!source) return null;
+    const from = report.snapshotWindows?.[source]?.from;
+    if (!from) return null;
+    const current = metas.find((m) => m.source === source);
+    const prev = metas
+      .filter((m) => current && m.at < current.at)
+      .sort((a, b) => b.at.localeCompare(a.at))[0];
+    if (!prev) return null;
+    if (from > prev.at.slice(0, 10)) {
+      return `Uwaga: okno sprzedaży zaczyna się ${from}, a poprzedni snapshot jest z ${prev.at.slice(
+        0,
+        10,
+      )}. Rozbieżność księgowa może być policzona na za krótkim oknie — pobierz snapshot z większym zakresem dni.`;
+    }
+    return null;
+  }, [report.snapshotWindows, source, metas]);
 
   const visibleLines = useMemo(() => {
     if (!audit) return [];
@@ -44,6 +78,109 @@ export function AuditView({
       return matchesQuery(l.productName, q);
     });
   }, [audit, q, onlyFlagged, onlyCounted]);
+
+  const linesSort = useSort(visibleLines, {
+    productName: (l) => l.productName,
+    systemStock: (l) => l.systemStock,
+    soldInWindow: (l) => l.soldInWindow,
+    physicalCount: (l) => l.physicalCount,
+    manko: (l) => l.manko,
+    mankoValue: (l) => l.mankoValue,
+    bookDiscrepancy: (l) => l.bookDiscrepancy,
+  });
+
+  function displayValue(key: string): string {
+    if (draft[key] !== undefined) return draft[key];
+    return ledgerCounts.has(key) ? String(ledgerCounts.get(key)) : "";
+  }
+
+  function commit(key: string, productId: string, presentationId: string) {
+    const raw = draft[key];
+    if (raw === undefined) return;
+    const trimmed = raw.trim();
+    setDraft((d) => {
+      const c = { ...d };
+      delete c[key];
+      return c;
+    });
+    if (trimmed === "" || Number.isNaN(Number(trimmed))) return;
+    update((r) =>
+      recordPhysicalCount(r, {
+        productId,
+        presentationId,
+        count: Number(trimmed),
+        snapshotSource: source,
+      }),
+    );
+  }
+
+  function increment(productId: string, presentationId: string) {
+    const key = variantKey(productId, presentationId);
+    const current = effectiveCounts.get(key) ?? 0;
+    update((r) =>
+      recordPhysicalCount(r, {
+        productId,
+        presentationId,
+        count: current + 1,
+        snapshotSource: source,
+      }),
+    );
+    return current + 1;
+  }
+
+  // Skan/szukaj: czytnik EAN = klawiatura (cyfry + Enter). EAN jest wbity w nazwę.
+  function onScanEnter() {
+    if (!audit) return;
+    const term = q.trim();
+    if (!term) return;
+    const matches = audit.lines.filter((l) => matchesQuery(l.productName, term));
+    if (matches.length === 0) {
+      setScanMsg(`Brak dopasowania: „${term}".`);
+      return;
+    }
+    if (matches.length === 1) {
+      const l = matches[0];
+      if (plusOne) {
+        const next = increment(l.productId, l.presentationId);
+        setScanMsg(`+1 → ${l.productName}: ${next} szt.`);
+        setQ("");
+        scanRef.current?.focus();
+        return;
+      }
+      setScanMsg(`${l.productName} — wpisz policzoną ilość, Enter zatwierdza.`);
+      const key = variantKey(l.productId, l.presentationId);
+      requestAnimationFrame(() => {
+        const el = inputRefs.current.get(key);
+        el?.focus();
+        el?.select();
+      });
+      return;
+    }
+    setScanMsg(`${matches.length} wariantów pasuje — wybierz wiersz.`);
+    const key = variantKey(matches[0].productId, matches[0].presentationId);
+    requestAnimationFrame(() => inputRefs.current.get(key)?.focus());
+  }
+
+  function onRowKeyDown(
+    e: React.KeyboardEvent<HTMLInputElement>,
+    key: string,
+    productId: string,
+    presentationId: string,
+    rowIndex: number,
+  ) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    commit(key, productId, presentationId);
+    // Po zatwierdzeniu wracamy do skanu (kolejny skan trafia we właściwe pole).
+    setQ("");
+    const next = linesSort.sorted[rowIndex + 1];
+    if (next && q.trim() === "") {
+      const nk = variantKey(next.productId, next.presentationId);
+      requestAnimationFrame(() => inputRefs.current.get(nk)?.focus());
+    } else {
+      requestAnimationFrame(() => scanRef.current?.focus());
+    }
+  }
 
   function saveAudit() {
     if (!audit) return;
@@ -88,11 +225,21 @@ export function AuditView({
           <button onClick={saveAudit} disabled={!audit}>
             Zapisz audyt do raportu
           </button>
+          <button className="ghost" onClick={() => audit && exportAuditCsv(audit)} disabled={!audit}>
+            Eksportuj CSV
+          </button>
         </div>
+        {windowWarn && <p className="warn" style={{ marginBottom: 0 }}>{windowWarn}</p>}
         {stats && (
           <div style={{ marginTop: 16 }}>
             <span className="stat">
-              <span className="v">{stats.countedVariants}</span>
+              <span className="v">
+                {stats.countedVariants}
+                <span className="muted" style={{ fontSize: 14 }}>
+                  {" "}
+                  / {totalVariants}
+                </span>
+              </span>
               <div className="l">policzonych wariantów</div>
             </span>
             <span className="stat">
@@ -119,16 +266,32 @@ export function AuditView({
       </div>
 
       <div className="panel">
-        <h2>Spis z natury — wpisz policzone ilości</h2>
+        <h2>Spis z natury — skanuj lub wpisz policzone ilości</h2>
         <div className="row" style={{ marginBottom: 12 }}>
-          <div className="field" style={{ minWidth: 320 }}>
-            <label>Szukaj (nazwa / EAN)</label>
+          <div className="field" style={{ minWidth: 360 }}>
+            <label>Skanuj / szukaj (EAN lub nazwa)</label>
             <input
+              ref={scanRef}
+              autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="np. woda 0.75 albo 5000112679540"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onScanEnter();
+                }
+              }}
+              placeholder="zeskanuj kod albo wpisz: woda 0.75"
             />
           </div>
+          <label className="field" style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={plusOne}
+              onChange={(e) => setPlusOne(e.target.checked)}
+            />
+            tryb +1 (skan dolicza sztukę)
+          </label>
           <label className="field" style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
             <input
               type="checkbox"
@@ -147,21 +310,61 @@ export function AuditView({
           </label>
           <span className="pill">{visibleLines.length} pozycji</span>
         </div>
+        {scanMsg && (
+          <p className="muted" style={{ marginTop: 0 }}>
+            {scanMsg}
+          </p>
+        )}
         <table>
           <thead>
             <tr>
-              <th>Produkt</th>
-              <th className="num">Stan Glofox</th>
-              <th className="num">Sprzedano (okno)</th>
-              <th className="num">Spis fizyczny</th>
-              <th className="num">Manko</th>
-              <th className="num">Wartość (zł)</th>
-              <th className="num">Rozb. księgowa</th>
+              <th
+                className="sortable"
+                onClick={() => linesSort.toggle("productName")}
+              >
+                Produkt{linesSort.arrow("productName")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("systemStock")}
+              >
+                Stan Glofox{linesSort.arrow("systemStock")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("soldInWindow")}
+              >
+                Sprzedano (okno){linesSort.arrow("soldInWindow")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("physicalCount")}
+              >
+                Spis fizyczny{linesSort.arrow("physicalCount")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("manko")}
+              >
+                Manko{linesSort.arrow("manko")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("mankoValue")}
+              >
+                Wartość (zł){linesSort.arrow("mankoValue")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => linesSort.toggle("bookDiscrepancy")}
+              >
+                Rozb. księgowa{linesSort.arrow("bookDiscrepancy")}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {visibleLines.map((l) => {
-              const key = `${l.productId}::${l.presentationId}`;
+            {linesSort.sorted.map((l, i) => {
+              const key = variantKey(l.productId, l.presentationId);
               return (
                 <tr key={key}>
                   <td>{l.productName}</td>
@@ -171,11 +374,19 @@ export function AuditView({
                   </td>
                   <td className="num">
                     <input
+                      ref={(el) => {
+                        if (el) inputRefs.current.set(key, el);
+                        else inputRefs.current.delete(key);
+                      }}
                       type="number"
-                      value={counts[key] ?? ""}
+                      value={displayValue(key)}
                       placeholder="—"
                       onChange={(e) =>
-                        setCounts((c) => ({ ...c, [key]: e.target.value }))
+                        setDraft((d) => ({ ...d, [key]: e.target.value }))
+                      }
+                      onBlur={() => commit(key, l.productId, l.presentationId)}
+                      onKeyDown={(e) =>
+                        onRowKeyDown(e, key, l.productId, l.presentationId, i)
                       }
                     />
                   </td>
@@ -194,9 +405,10 @@ export function AuditView({
           </tbody>
         </table>
         <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-          Manko dodatnie = brakuje na półce (możliwa kradzież / rozdawanie).
-          „Sprzedano (okno)” = sztuki sprzedane od poprzedniego snapshotu. Rozbieżność
-          księgowa ≠ 0 = stan w Glofox ruszył inaczej niż wynika z dostaw i sprzedaży.
+          Skan EAN ustawia fokus na polu spisu (tryb +1 = dolicza sztukę). Enter zatwierdza
+          i przechodzi dalej. Spis zapisuje się na bieżąco do pliku — F5 nic nie kasuje.
+          Manko dodatnie = brakuje na półce. Rozbieżność księgowa ≠ 0 = stan w Glofox ruszył
+          inaczej niż wynika z dostaw i sprzedaży.
         </p>
       </div>
     </>

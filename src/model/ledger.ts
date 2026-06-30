@@ -113,10 +113,19 @@ export function ingestSnapshot(
     });
   }
 
+  const snapshotWindows =
+    snap.salesFrom || snap.salesTo
+      ? {
+          ...report.snapshotWindows,
+          [source]: { from: snap.salesFrom, to: snap.salesTo },
+        }
+      : report.snapshotWindows;
+
   return {
     ...report,
     catalog: mergeCatalog(report.catalog, snap.products),
     ledger: [...report.ledger, ...newEvents],
+    snapshotWindows,
   };
 }
 
@@ -146,10 +155,76 @@ export function recordDelivery(
   return { ...report, ledger: [...report.ledger, ev] };
 }
 
+/**
+ * Zapisuje spis z natury (absolutny) jako zdarzenie PHYSICAL_COUNT przypięte do
+ * snapshotu (source = snapshotSource). Dzięki temu spis ląduje od razu w ledgerze
+ * (auto-zapis do pliku) i przeżywa F5 — korekta = kolejne zdarzenie (latest wins).
+ */
+export function recordPhysicalCount(
+  report: ReportState,
+  input: {
+    productId: string;
+    presentationId: string;
+    count: number;
+    snapshotSource: string;
+    at?: string;
+  },
+): ReportState {
+  const ev: LedgerEvent = {
+    id: genId("count"),
+    type: "PHYSICAL_COUNT",
+    at: input.at ?? new Date().toISOString(),
+    productId: input.productId,
+    presentationId: input.presentationId,
+    qty: input.count,
+    source: input.snapshotSource,
+  };
+  return { ...report, ledger: [...report.ledger, ev] };
+}
+
+/** Najnowszy spis z natury per wariant dla danej sesji (snapshotSource). */
+export function physicalCountMap(
+  ledger: LedgerEvent[],
+  snapshotSource: string,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const ev of ledger) {
+    if (ev.type !== "PHYSICAL_COUNT" || ev.source !== snapshotSource) continue;
+    map.set(variantKey(ev.productId, ev.presentationId), ev.qty); // later overrides
+  }
+  return map;
+}
+
+/** Korekta ręczna (delta, może być ujemna) — np. cofnięcie błędnej dostawy. */
+export function recordAdjustment(
+  report: ReportState,
+  input: {
+    productId: string;
+    presentationId: string;
+    qty: number;
+    at: string;
+    unitPrice?: number;
+    note?: string;
+  },
+): ReportState {
+  const ev: LedgerEvent = {
+    id: genId("adj"),
+    type: "ADJUSTMENT",
+    at: input.at,
+    productId: input.productId,
+    presentationId: input.presentationId,
+    qty: input.qty,
+    unitPrice: input.unitPrice,
+    note: input.note,
+    source: "manual",
+  };
+  return { ...report, ledger: [...report.ledger, ev] };
+}
+
 /** Suma delt (DELIVERY dodatnie / SALES_IMPORT ujemne) w oknie (afterAt, untilAt]. */
 export function sumDeltasInWindow(
   ledger: LedgerEvent[],
-  type: "DELIVERY" | "SALES_IMPORT",
+  type: "DELIVERY" | "SALES_IMPORT" | "ADJUSTMENT",
   afterAt: string,
   untilAt: string,
 ): Map<string, number> {

@@ -1,8 +1,9 @@
 # Glofox — Moduł Inwentaryzacji
 
 Panel do przeprowadzania i zarządzania inwentaryzacją sklepu Glofox (kontrola
-ubytków / loss prevention). **Bez backendu** — trwałym źródłem prawdy jest
-eksportowany plik JSON; localStorage służy tylko jako autosave roboczy.
+ubytków / loss prevention). **Bez backendu** — kanonem jest plik na dysku z
+**auto-zapisem** (File System Access API; uchwyt pliku w IndexedDB). localStorage to
+kopia awaryjna; w przeglądarkach bez tego API panel wraca do ręcznego eksportu/importu JSON.
 
 ## Po co to (logika biznesowa)
 
@@ -44,20 +45,20 @@ npm run build      # produkcyjny build (statyczne pliki -> dist/)
 
 ## Przepływ pracy
 
-1. **Pobierz snapshot** — na zalogowanym `app.glofox.com` odpal
-   `src/bridge/glofox-grab.bookmarklet.js` (DevTools → Console, wklej, Enter).
-   Pobierze `glofox-snapshot-RRRR-MM-DD.json`.
-2. **Importuj** ten plik w panelu (przycisk „Importuj plik”). Zakładka
-   *Stan / Snapshoty* pokaże katalog i bieżące stany.
-3. **Dostawy** — wpisywane ręcznie z faktur: wyszukaj produkt po nazwie/EAN, wybierz,
-   podaj ilość, datę i nr faktury. Kontrola krzyżowa względem stanu Glofox.
-4. **Sprzedaż** — podgląd sprzedaży złączonej po nazwie: sztuki/wartość per produkt
-   i per sprzedawca (`sold_by`).
-5. **Audyt (spis)** — wybierz snapshot, ustaw próg tolerancji, wyszukaj produkt i wpisz
-   **spis z natury**. Moduł na żywo liczy manko, wartość, „sprzedano w oknie” i rozbieżność
-   księgową. Filtry „tylko policzone” / „tylko oznaczone”. „Zapisz audyt do raportu”.
-6. **Eksportuj raport** (JSON) — to kanon. Następnym razem **zaimportuj** go, by
-   wznowić wiedzę o wcześniejszych inwentaryzacjach.
+0. **Raz:** kliknij „Utwórz plik danych" (auto-zapis) — patrz badge statusu u góry.
+1. **Pobierz snapshot** — zakładka *Pobierz dane*: przeciągnij bookmarklet „Glofox →
+   snapshot" na pasek zakładek (raz), potem na zalogowanym `app.glofox.com` kliknij go.
+   Podaj okno sprzedaży (dni). Pobierze `glofox-snapshot-RRRR-MM-DD.json`.
+2. **Importuj snapshot** w panelu. Zakładka *Stan / Snapshoty* pokaże katalog i stany.
+3. **Dostawy** — ręcznie z faktur (nazwa/EAN, ilość, data, nr faktury). „cofnij" =
+   korekta (ADJUSTMENT) z zachowaniem śladu audytu.
+4. **Sprzedaż** — podgląd złączony po nazwie: sztuki/wartość per produkt i per `sold_by`.
+5. **Audyt (spis)** — wybierz snapshot, próg tolerancji. **Skanuj EAN** (fokus pola →
+   wpisz ilość → Enter; albo „tryb +1") lub wpisuj ręcznie. Licznik postępu „X / N",
+   filtry „tylko policzone / oznaczone". **Spis zapisuje się na żywo do pliku (przeżywa
+   F5)** jako zdarzenia `PHYSICAL_COUNT`. „Zapisz audyt", „Eksportuj CSV".
+6. **Auto-zapis do pliku** jest kanonem — nic nie eksportujesz ręcznie. Po reloadzie
+   ewentualnie „Wznów zapis do pliku". Ostrzeżenie, gdy okno sprzedaży nie pokrywa przerwy.
 
 > Snapshot i spis rób przy **zamkniętym sklepie** — sprzedaż w trakcie liczenia
 > zaburza wynik.
@@ -73,9 +74,10 @@ npm run build      # produkcyjny build (statyczne pliki -> dist/)
 ### Ważne zasady operacyjne sprzedaży
 - Bierzemy tylko `revenue_stream_type === "Products"`; „Kaucja plastik", „Wejście
   jednorazowe", „Zamrożenie", opłaty członkowskie odpadają (nie matchują katalogu).
-- **Zakres dat = od poprzedniego snapshotu do dziś.** Ustaw `SALES_DAYS_BACK` w bookmarkleta,
-  by okno sprzedaży pokrywało okres między snapshotami — inaczej rozbieżność księgowa
-  (prev + dostawy − sprzedaż) policzy się na złym oknie.
+- **Zakres dat = od poprzedniego snapshotu do dziś.** Bookmarklet pyta o liczbę dni
+  (domyślnie 60) i zapisuje zakres (`salesFrom`/`salesTo`) w snapshocie; panel **ostrzega**
+  w Audycie, gdy okno nie pokrywa przerwy między snapshotami (rozbieżność księgowa
+  policzyłaby się na złym oknie).
 - Sprzedaż nie rozróżnia wariantu → przypisywana do pierwszego wariantu produktu.
 
 Do szybkiego testu UI bez Glofox jest `src/fixtures/sample-snapshot.json`.
@@ -84,10 +86,13 @@ Do szybkiego testu UI bez Glofox jest `src/fixtures/sample-snapshot.json`.
 
 | Plik | Rola |
 |------|------|
-| `src/model/types.ts` | model domenowy (ledger, audyt, raport) |
-| `src/model/ledger.ts` | ingest snapshotów, zdarzenia, okna czasowe |
+| `src/model/types.ts` | model domenowy (ledger, audyt, raport, okno sprzedaży) |
+| `src/model/ledger.ts` | ingest, dostawy, spis (PHYSICAL_COUNT), korekty (ADJUSTMENT), okna |
 | `src/model/reconcile.ts` | **rdzeń**: manko + bookDiscrepancy (czyste, testowane) |
-| `src/storage/file.ts` | import/eksport JSON (kanon) |
-| `src/storage/local.ts` | autosave localStorage (draft) |
+| `src/storage/fileSystem.ts` | **auto-zapis do pliku** (File System Access) + WriteQueue |
+| `src/storage/handleStore.ts` | uchwyt pliku w IndexedDB (przeżywa reload) |
+| `src/storage/file.ts` | import/eksport JSON + eksport CSV audytu |
+| `src/storage/local.ts` | localStorage (fallback / kopia awaryjna) |
+| `scripts/build-bookmarklet.mjs` | minifikuje most → `bookmarklet.generated.ts` (link `javascript:`) |
 | `src/bridge/glofox-grab.bookmarklet.js` | most danych z app.glofox.com |
-| `src/ui/*` | zakładki: Stan, Dostawy, Audyt, Raport |
+| `src/ui/*` | zakładki: Pobierz dane, Stan, Dostawy, Sprzedaż, Audyt, Raport |

@@ -39,6 +39,9 @@ export interface GlofoxSnapshot {
   branchId?: string;
   products: Product[];
   sales: SaleLine[];
+  /** Zakres dat okna sprzedaży użytego przy pobraniu (YYYY-MM-DD) — do kontroli pokrycia. */
+  salesFrom?: string;
+  salesTo?: string;
 }
 
 export type LedgerEventType =
@@ -111,6 +114,8 @@ export interface ReportState {
   /** Append-only ślad audytu. */
   ledger: LedgerEvent[];
   audits: Audit[];
+  /** Okno sprzedaży per snapshot (source → zakres dat) — do kontroli pokrycia. */
+  snapshotWindows?: Record<string, { from?: string; to?: string }>;
 }
 
 export function emptyReport(): ReportState {

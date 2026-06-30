@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ReportState, variantKey } from "../model/types";
 import { buildVariantIndex } from "../model/reconcile";
 import { matchesQuery } from "../state/store";
+import { useSort } from "./useSort";
 
 export function SalesView({ report }: { report: ReportState }) {
   const [q, setQ] = useState("");
@@ -46,6 +47,22 @@ export function SalesView({ report }: { report: ReportState }) {
     };
   }, [sales, vIndex]);
 
+  const filtered = useMemo(
+    () => byProduct.filter((p) => matchesQuery(p.name, q)),
+    [byProduct, q],
+  );
+
+  const staffSort = useSort(byStaff, {
+    who: ([who]) => who,
+    units: ([, s]) => s.units,
+    value: ([, s]) => s.value,
+  });
+  const productSort = useSort(filtered, {
+    name: (p) => p.name,
+    units: (p) => p.units,
+    value: (p) => p.value,
+  });
+
   if (sales.length === 0) {
     return (
       <div className="panel">
@@ -56,8 +73,6 @@ export function SalesView({ report }: { report: ReportState }) {
       </div>
     );
   }
-
-  const filtered = byProduct.filter((p) => matchesQuery(p.name, q));
 
   return (
     <>
@@ -87,13 +102,25 @@ export function SalesView({ report }: { report: ReportState }) {
         <table>
           <thead>
             <tr>
-              <th>Sprzedawca</th>
-              <th className="num">Sztuk</th>
-              <th className="num">Wartość (zł)</th>
+              <th className="sortable" onClick={() => staffSort.toggle("who")}>
+                Sprzedawca{staffSort.arrow("who")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => staffSort.toggle("units")}
+              >
+                Sztuk{staffSort.arrow("units")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => staffSort.toggle("value")}
+              >
+                Wartość (zł){staffSort.arrow("value")}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {byStaff.map(([who, s]) => (
+            {staffSort.sorted.map(([who, s]) => (
               <tr key={who}>
                 <td>{who}</td>
                 <td className="num">{s.units}</td>
@@ -117,13 +144,28 @@ export function SalesView({ report }: { report: ReportState }) {
         <table>
           <thead>
             <tr>
-              <th>Produkt</th>
-              <th className="num">Sprzedano (szt)</th>
-              <th className="num">Wartość (zł)</th>
+              <th
+                className="sortable"
+                onClick={() => productSort.toggle("name")}
+              >
+                Produkt{productSort.arrow("name")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => productSort.toggle("units")}
+              >
+                Sprzedano (szt){productSort.arrow("units")}
+              </th>
+              <th
+                className="num sortable"
+                onClick={() => productSort.toggle("value")}
+              >
+                Wartość (zł){productSort.arrow("value")}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p, i) => (
+            {productSort.sorted.map((p, i) => (
               <tr key={i}>
                 <td>{p.name}</td>
                 <td className="num">{p.units}</td>

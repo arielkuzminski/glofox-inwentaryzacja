@@ -78,6 +78,13 @@ export function computeAudit(
     windowStart,
     current.at,
   );
+  // Korekty ręczne (np. cofnięcie błędnej dostawy) też zmieniają oczekiwany stan.
+  const adjustments = sumDeltasInWindow(
+    report.ledger,
+    "ADJUSTMENT",
+    windowStart,
+    current.at,
+  );
 
   const vIndex = buildVariantIndex(report.catalog);
   const lines: AuditLine[] = [];
@@ -98,8 +105,9 @@ export function computeAudit(
       const prevStock = prevMap.get(key)!;
       const deliv = deliveries.get(key) ?? 0;
       const sold = sales.get(key) ?? 0; // już ujemne
+      const adj = adjustments.get(key) ?? 0;
       soldInWindow = -sold;
-      expectedFromBook = prevStock + deliv + sold;
+      expectedFromBook = prevStock + deliv + sold + adj;
       bookDiscrepancy = systemStock - expectedFromBook;
     }
 
