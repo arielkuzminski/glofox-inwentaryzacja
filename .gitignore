@@ -1,0 +1,7 @@
+node_modules
+dist
+real_data
+tsconfig.tsbuildinfo
+*.local
+.DS_Store
+.vite

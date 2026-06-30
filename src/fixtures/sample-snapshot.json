@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-06-15T20:30:00.000Z",
+  "branchId": "6731f59489dbd5ea4e00677c",
+  "products": [
+    {
+      "productId": "691b31841d1c67c2ec044f88",
+      "name": "5000112679540 Woda Kropla Beskidu 0.75L [k]",
+      "presentations": [
+        { "presentationId": "1763389733646", "name": "", "stock": 39, "price": 4, "wholesalePrice": 0 }
+      ]
+    },
+    {
+      "productId": "69f0568ed9cfd5a39b08396a",
+      "name": "5902114041809 PROTEIN BOOGIE BAR PEANUT BUTTER",
+      "presentations": [
+        { "presentationId": "1777358417747", "name": "", "stock": 83, "price": 8, "wholesalePrice": 0 }
+      ]
+    },
+    {
+      "productId": "698b01721261cd89f506815d",
+      "name": "5902114019815 WHEY 100 NEW FORMULA 700g HAZELNUT",
+      "presentations": [
+        { "presentationId": "1770717527794", "name": "", "stock": 12, "price": 99, "wholesalePrice": 0 }
+      ]
+    }
+  ],
+  "sales": [
+    { "orderId": "o-1001", "productId": "691b31841d1c67c2ec044f88", "presentationId": "1763389733646", "qty": 5, "soldAt": "2026-06-12T12:00:00.000Z", "staffId": "Maja Komajda" },
+    { "orderId": "o-1002", "productId": "69f0568ed9cfd5a39b08396a", "presentationId": "1777358417747", "qty": 2, "soldAt": "2026-06-13T12:00:00.000Z", "staffId": "Julia Betkowska" },
+    { "orderId": "o-1003", "productId": "691b31841d1c67c2ec044f88", "presentationId": "1763389733646", "qty": 3, "soldAt": "2026-06-14T12:00:00.000Z", "staffId": "Julia Betkowska" }
+  ]
+}
