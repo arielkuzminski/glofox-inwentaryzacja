@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "npm run bookmarklet && vitest run",
     "test:watch": "npm run bookmarklet && vitest",
-    "typecheck": "npm run bookmarklet && tsc -b --noEmit"
+    "typecheck": "npm run bookmarklet && tsc -b --noEmit",
+    "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

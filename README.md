@@ -53,6 +53,7 @@ Bookmarklet/skrypt: `src/bridge/glofox-grab.bookmarklet.js`.
 npm install
 npm run dev        # panel na http://localhost:5173
 npm test           # testy logiki rekonsyliacji (vitest)
+npm run e2e        # smoke test w przeglądarce — wymaga działającego `npm run dev`
 npm run build      # produkcyjny build (statyczne pliki -> dist/)
 ```
 
