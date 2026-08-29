@@ -21,8 +21,20 @@ const SNAP_PATH = resolve(
 const hasReal = existsSync(SNAP_PATH);
 const d = hasReal ? describe : describe.skip;
 
+// UWAGA: `describe.skip` i tak WYKONUJE ciało bloku (zbiera pominięte testy), więc
+// pliku nie wolno czytać bezwarunkowo — bez tego CI wywala się na ENOENT, bo
+// real_data/ jest w .gitignore.
+const EMPTY_SNAP: GlofoxSnapshot = {
+  schemaVersion: 1,
+  capturedAt: "1970-01-01T00:00:00.000Z",
+  products: [],
+  sales: [],
+};
+
 d("UI na prawdziwym snapshocie", () => {
-  const snap = JSON.parse(readFileSync(SNAP_PATH, "utf8")) as GlofoxSnapshot;
+  const snap = hasReal
+    ? (JSON.parse(readFileSync(SNAP_PATH, "utf8")) as GlofoxSnapshot)
+    : EMPTY_SNAP;
   const report: ReportState = ingestSnapshot(emptyReport(), snap);
 
   const variantCount = snap.products.reduce(
