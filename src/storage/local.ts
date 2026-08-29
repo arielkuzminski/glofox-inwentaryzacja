@@ -1,7 +1,8 @@
 // Autosave roboczy w localStorage — chroni pracę przed F5 w środku liczenia.
 // To NIE jest kanon: trwałym źródłem prawdy jest eksportowany plik JSON.
 
-import { ReportState, SCHEMA_VERSION, emptyReport } from "../model/types";
+import { LoadedReport, ReportState, SCHEMA_VERSION, emptyReport } from "../model/types";
+import { normalizeReport } from "./file";
 
 const KEY = "glofox-inwentaryzacja:autosave:v1";
 
@@ -17,9 +18,9 @@ export function loadDraft(): ReportState | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as ReportState;
+    const parsed = JSON.parse(raw) as LoadedReport;
     if (parsed.schemaVersion !== SCHEMA_VERSION) return null;
-    return parsed;
+    return normalizeReport(parsed);
   } catch {
     return null;
   }

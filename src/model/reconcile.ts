@@ -42,12 +42,14 @@ export function buildVariantIndex(catalog: Product[]): Map<string, VariantInfo> 
 /**
  * Liczy audyt dla snapshotu o danym source.
  * physicalCounts: variantKey -> policzona z natury ilość (brak wpisu = nie policzono).
+ * notes: variantKey -> uwaga wpisana przy spisie (opcjonalna, nie wpływa na liczby).
  */
 export function computeAudit(
   report: ReportState,
   snapshotSource: string,
   physicalCounts: Map<string, number>,
   toleranceUnits: number,
+  notes?: Map<string, string>,
 ): Audit {
   const metas = snapshotMetas(report.ledger);
   const current = metas.find((m) => m.source === snapshotSource);
@@ -124,6 +126,7 @@ export function computeAudit(
       mankoValue,
       expectedFromBook,
       bookDiscrepancy,
+      note: notes?.get(key) ?? null,
       flagged: manko !== null && Math.abs(manko) > toleranceUnits,
     });
   }

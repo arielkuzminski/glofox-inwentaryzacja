@@ -195,6 +195,47 @@ export function physicalCountMap(
   return map;
 }
 
+/**
+ * Uwaga do pozycji spisu (kolumna „Uwagi" wzoru sieci) — np. „stłuczka".
+ * Wzorzec jak PHYSICAL_COUNT: przypięta do sesji (snapshotSource), latest wins,
+ * ślad poprzednich wersji zostaje. qty=0, więc nie dotyka matematyki stanu.
+ */
+export function recordCountNote(
+  report: ReportState,
+  input: {
+    productId: string;
+    presentationId: string;
+    note: string;
+    snapshotSource: string;
+    at?: string;
+  },
+): ReportState {
+  const ev: LedgerEvent = {
+    id: genId("note"),
+    type: "COUNT_NOTE",
+    at: input.at ?? new Date().toISOString(),
+    productId: input.productId,
+    presentationId: input.presentationId,
+    qty: 0,
+    note: input.note,
+    source: input.snapshotSource,
+  };
+  return { ...report, ledger: [...report.ledger, ev] };
+}
+
+/** Najnowsza uwaga per wariant dla danej sesji spisu. */
+export function countNoteMap(
+  ledger: LedgerEvent[],
+  snapshotSource: string,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const ev of ledger) {
+    if (ev.type !== "COUNT_NOTE" || ev.source !== snapshotSource) continue;
+    map.set(variantKey(ev.productId, ev.presentationId), ev.note ?? "");
+  }
+  return map;
+}
+
 /** Korekta ręczna (delta, może być ujemna) — np. cofnięcie błędnej dostawy. */
 export function recordAdjustment(
   report: ReportState,

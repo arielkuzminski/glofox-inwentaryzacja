@@ -1,5 +1,9 @@
 # Instrukcja krok po kroku — Inwentaryzacja Glofox
 
+> **Rytm:** sieć wymaga spisu **raz w tygodniu, najlepiej w niedzielę** (po zamknięciu
+> lub przed otwarciem). Ten moduł robi jednym przejściem to, co trzeba oddać sieci
+> (plik „WZÓR INWENTARYZACJA”) **oraz** kontrolę ubytków, której w tamtym pliku nie ma.
+
 Moduł nie ma backendu, ale **dane zapisują się same do wybranego pliku** na dysku
 (File System Access API) — bez ręcznego eksportu/importu co sesję. Plik jest kanonem;
 localStorage trzyma kopię awaryjną. Wskazanie pliku robisz **raz** (patrz część A),
@@ -33,6 +37,8 @@ a uchwyt do niego pamięta nawet przeglądarka po odświeżeniu.
    każda zmiana zapisuje się tam sama — badge u góry pokazuje **„Zapisywane do … ✓"**.
    - Następnym razem, jeśli przeglądarka poprosi o zgodę, kliknij **„Wznów zapis do pliku"**.
    - Masz już plik z poprzedniej sesji? Użyj **„Otwórz plik danych"** zamiast „Utwórz".
+6. **Raz:** zakładka **Ustawienia** → wpisz **nazwę klubu** (trafia do nagłówka pliku
+   dla sieci), **próg krótkiej daty** (domyślnie 30 dni) i **domyślną tolerancję** spisu.
 
 > Panel i Glofox to dwie różne karty — panel **nie łączy się** z Glofox sam. Dane
 > przenosisz plikiem `snapshot.json` (część B).
@@ -51,8 +57,8 @@ przycisk **„Glofox → snapshot"** na pasek zakładek przeglądarki
 Potem za każdym razem:
 1. Zaloguj się na **https://app.glofox.com** jako **ADMIN** → dashboard → **Store**.
 2. Kliknij zakładkę **„Glofox → snapshot"** na pasku.
-3. W okienku podaj **ile dni sprzedaży wstecz** pobrać (domyślnie 60). Okno musi pokryć
-   czas **od ostatniego snapshotu** — inaczej panel ostrzeże, że rozbieżność księgowa
+3. W okienku podaj **ile dni sprzedaży wstecz** pobrać (domyślnie 14 — przy spisie co
+   niedzielę to z zapasem). Okno musi pokryć czas **od ostatniego snapshotu** — inaczej panel ostrzeże, że rozbieżność księgowa
    policzy się na za krótkim oknie.
 4. **Jeśli wyskoczy prośba o token** — kliknij dowolną pozycję w menu Glofox (np.
    **Members**). Skrypt złapie świeży token z ruchu i ruszy dalej (do 25 s).
@@ -124,12 +130,64 @@ Najlepiej **przy zamkniętym sklepie** (sprzedaż w trakcie liczenia zaburza wyn
 
 ---
 
+## CZĘŚĆ E2. Krótkie daty ważności
+
+Sieć wymaga kolumn „Krótka data ważności” i „Ilość sztuk z krótką datą”. Wpisujesz je
+w osobnej zakładce — **spis zostaje czysty**, żeby skanowanie szło szybko.
+
+1. Zakładka **Daty ważności** → wyszukaj produkt → **Wybierz**.
+2. Wpisz **datę z opakowania** i **ilość sztuk**, opcjonalnie uwagę (np. „przecena −30%”)
+   → **Dodaj partię**.
+3. Lista pokazuje status: **przeterminowane** / **krótka data** (w progu z Ustawień) / **ok**.
+4. Gdy towar zejdzie albo go wycofasz — kliknij **„wycofano"**. Partia znika z listy,
+   ale ślad zostaje w pliku danych.
+
+> Do eksportu dla sieci trafia **najbliższa data** i **suma sztuk** w progu — dokładnie
+> jak w kolumnach F i G wzoru.
+
+---
+
+## CZĘŚĆ E3. Zamówienia (ile domówić)
+
+Zakładka **Zamówienia** odpowiada na krok 4 instrukcji sieci („porównaj z poprzednim
+tygodniem i oceń, czy złożyć zamówienie”).
+
+- **Stan bieżący** = spis z natury, a gdy pozycji nie policzono — stan z Glofoxa
+  (oznaczone dopiskiem; przy ubytkach Glofox zawyża).
+- **Zużycie / tydz.** = sprzedaż z okna między dwoma ostatnimi snapshotami przeliczona
+  na 7 dni. Przy pierwszym spisie jeszcze go nie ma — pojawi się po następnym.
+- **Minimum** wpisujesz raz na produkt. Szybciej: **„min = zużycie tyg. (wszystkie)"**
+  ustawi minima na poziomie tygodniowej rotacji; potem korygujesz ręcznie.
+- **Do zamówienia** = minimum − stan bieżący. **Pokrycie < 1 tygodnia** (na czerwono)
+  znaczy, że towar skończy się przed następną niedzielą.
+- **Eksportuj zamówienie (CSV)** — lista tylko z pozycjami do domówienia.
+
+---
+
+## CZĘŚĆ E4. Oddanie wyników do sieci
+
+W zakładce **Spis (audyt)** (albo później w **Raporcie**, przy zapisanym audycie):
+
+- **„Wzór sieci (XLSX)"** — gotowy plik w układzie „WZÓR INWENTARYZACJA”: nazwa klubu
+  i data w nagłówku, kolumny A–H, formuła w kolumnie „Różnica”. Otwierasz w Excelu
+  i wysyłasz.
+- **„Wzór sieci (CSV)"** — gdy sieć każe wklejać do arkusza online.
+- Checkbox **„także pozycje bez stanu"** dokłada resztę katalogu (domyślnie eksport
+  pomija pozycje, które mają stan 0 i nie były liczone).
+
+> **Uwaga na znak!** W naszym panelu **manko dodatnie = brakuje na półce**.
+> W pliku sieci jest odwrotnie: **„Różnica” ujemna = brakuje**. Eksport przelicza to
+> automatycznie — nie poprawiaj ręcznie.
+
+---
+
 ## CZĘŚĆ F. Następny raz
 
 1. Otwórz panel (część A, krok 3). Jeśli badge pokazuje **„Wznów zapis do pliku"** —
    kliknij go (przeglądarka prosi o zgodę na zapis). Dane wczytają się z pliku same.
-2. Dalej normalnie: pobierz snapshot (B), dostawy (D), spis (E). Nic nie eksportujesz —
-   wszystko zapisuje się na bieżąco do pliku.
+2. Dalej normalnie: pobierz snapshot (B), dostawy (D), spis (E), daty ważności (E2),
+   zamówienia (E3), plik dla sieci (E4). Nic nie eksportujesz „na zapas” — wszystko
+   zapisuje się na bieżąco do pliku danych.
 
 > Tylko w przeglądarce bez auto-zapisu (np. Firefox): wracasz przyciskiem **„Importuj"**
 > do ostatniego raportu i na końcu **„Eksportuj kopię (JSON)"**, jak w starym trybie.
@@ -143,6 +201,8 @@ Najlepiej **przy zamkniętym sklepie** (sprzedaż w trakcie liczenia zaburza wyn
 | **Manko dodatnie** ⚠ | Na półce jest mniej niż mówi Glofox | Realny ubytek: kradzież / rozdawanie / stłuczka / błąd liczenia |
 | Manko ujemne | Na półce jest więcej niż w Glofox | Niewbita sprzedaż, niewprowadzona dostawa, pomyłka w liczeniu |
 | **Rozbieżność księgowa ≠ 0** | Stan Glofox ruszył inaczej niż (poprz. + dostawy − sprzedaż) | Błąd ewidencji w samym Glofox (ręczna korekta stanu, write-off) |
+| **Powtarzające się manko** ⚠⚠ | Ten sam produkt znika dwa spisy z rzędu (Raport) | Najmocniejszy sygnał: pomyłka w liczeniu się nie powtarza. Sprawdź, kto stał na kasie (Sprzedaż) |
+| Pokrycie < 1 tyg. (Zamówienia) | Towar skończy się przed następną niedzielą | Domów przy najbliższym zamówieniu |
 | Dużo „linii bez dopasowania" w Console | Nazwy sprzedaży nie pasują do katalogu | Sprawdź, czy nie zmieniono nazw produktów; zgłoś do dostrojenia |
 
 ---

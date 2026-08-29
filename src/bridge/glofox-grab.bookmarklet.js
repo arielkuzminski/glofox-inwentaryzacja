@@ -23,13 +23,15 @@
 
   // Sprzedaż: drilldown po pozycjach. Okno = od poprzedniego snapshotu do dziś —
   // inaczej rozbieżność księgowa (prev + dostawy − sprzedaż) liczy się na złym oknie.
-  // Pytamy o liczbę dni (domyślnie szeroko), a zakres trafia do snapshotu, żeby panel
-  // mógł ostrzec, gdy okno nie pokrywa przerwy między snapshotami.
-  const DEFAULT_DAYS_BACK = 60;
+  // Domyślnie 14 dni: sieć wymaga spisu co tydzień (niedziela), więc dwa tygodnie
+  // z zapasem pokrywają przerwę. Zakres trafia do snapshotu, żeby panel ostrzegł,
+  // gdy jednak nie pokrywa przerwy między snapshotami.
+  const DEFAULT_DAYS_BACK = 14;
   let SALES_DAYS_BACK = DEFAULT_DAYS_BACK;
   {
     const ans = prompt(
-      "Sprzedaż — ile dni wstecz pobrać? (okno musi pokryć czas od ostatniego snapshotu)",
+      "Sprzedaż — ile dni wstecz pobrać?\n" +
+        "Okno musi pokryć czas od ostatniego spisu (przy rytmie tygodniowym 14 dni wystarczy).",
       String(DEFAULT_DAYS_BACK),
     );
     const n = ans === null ? DEFAULT_DAYS_BACK : parseInt(ans, 10);

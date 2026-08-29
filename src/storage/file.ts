@@ -4,11 +4,32 @@
 import {
   Audit,
   GlofoxSnapshot,
+  LoadedReport,
   ReportState,
   SCHEMA_VERSION,
+  Settings,
 } from "../model/types";
 
-function downloadBlob(filename: string, blob: Blob): void {
+export const DEFAULT_SETTINGS: Settings = {
+  expiryWarnDays: 30,
+  toleranceUnits: 0,
+};
+
+/**
+ * Granica wczytywania: plik zapisany starszą wersją modułu nie ma pól dodanych
+ * później. Dopełniamy je domyślnymi wartościami zamiast bumpować SCHEMA_VERSION —
+ * dzięki temu kluby nie tracą dostępu do swoich plików (assertSchema jest sztywne).
+ */
+export function normalizeReport(raw: LoadedReport): ReportState {
+  return {
+    ...raw,
+    expiryBatches: raw.expiryBatches ?? [],
+    minStock: raw.minStock ?? {},
+    settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },
+  };
+}
+
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -50,7 +71,7 @@ const CSV_HEADERS = [
   "Oznaczone",
 ] as const;
 
-function csvCell(v: string | number | null): string {
+export function csvCell(v: string | number | null): string {
   if (v === null) return "";
   const s = String(v);
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -102,7 +123,7 @@ export function readJsonFile<T>(file: File): Promise<T> {
   });
 }
 
-export function isReport(obj: unknown): obj is ReportState {
+export function isReport(obj: unknown): obj is LoadedReport {
   const o = obj as Partial<ReportState>;
   return (
     !!o &&

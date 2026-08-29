@@ -1,10 +1,22 @@
 import { useMemo, useRef, useState } from "react";
 import { ReportState, variantKey } from "../model/types";
-import { snapshotMetas, physicalCountMap, recordPhysicalCount } from "../model/ledger";
+import {
+  snapshotMetas,
+  physicalCountMap,
+  recordPhysicalCount,
+  countNoteMap,
+  recordCountNote,
+} from "../model/ledger";
 import { computeAudit, summarizeAudit } from "../model/reconcile";
 import { matchesQuery } from "../state/store";
 import { exportAuditCsv } from "../storage/file";
+import {
+  franchiseRowsFor,
+  exportFranchiseCsv,
+  exportFranchiseXlsx,
+} from "../storage/franchise";
 import { useSort } from "./useSort";
+import { AuditTable } from "./AuditTable";
 
 export function AuditView({
   report,
@@ -16,16 +28,20 @@ export function AuditView({
   const metas = useMemo(() => snapshotMetas(report.ledger), [report.ledger]);
   const latest = metas[metas.length - 1];
   const [source, setSource] = useState(latest?.source ?? "");
-  const [tolerance, setTolerance] = useState("0");
+  const [tolerance, setTolerance] = useState(
+    String(report.settings.toleranceUnits),
+  );
   const [saved, setSaved] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [onlyFlagged, setOnlyFlagged] = useState(false);
   const [onlyCounted, setOnlyCounted] = useState(false);
   const [plusOne, setPlusOne] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [exportAll, setExportAll] = useState(false);
 
   // Bufor aktualnie edytowanego pola — commit (Enter/blur) zapisuje do ledgera.
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
   const scanRef = useRef<HTMLInputElement>(null);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
 
@@ -43,10 +59,26 @@ export function AuditView({
     return m;
   }, [ledgerCounts, draft]);
 
+  const ledgerNotes = useMemo(
+    () => (source ? countNoteMap(report.ledger, source) : new Map<string, string>()),
+    [report.ledger, source],
+  );
+  const effectiveNotes = useMemo(() => {
+    const m = new Map(ledgerNotes);
+    for (const [k, v] of Object.entries(noteDraft)) m.set(k, v);
+    return m;
+  }, [ledgerNotes, noteDraft]);
+
   const audit = useMemo(() => {
     if (!source) return null;
-    return computeAudit(report, source, effectiveCounts, Number(tolerance) || 0);
-  }, [report, source, effectiveCounts, tolerance]);
+    return computeAudit(
+      report,
+      source,
+      effectiveCounts,
+      Number(tolerance) || 0,
+      effectiveNotes,
+    );
+  }, [report, source, effectiveCounts, tolerance, effectiveNotes]);
 
   const stats = audit ? summarizeAudit(audit) : null;
   const totalVariants = audit ? audit.lines.length : 0;
@@ -109,6 +141,29 @@ export function AuditView({
         productId,
         presentationId,
         count: Number(trimmed),
+        snapshotSource: source,
+      }),
+    );
+  }
+
+  function displayNote(key: string): string {
+    return noteDraft[key] ?? ledgerNotes.get(key) ?? "";
+  }
+
+  function commitNote(key: string, productId: string, presentationId: string) {
+    const raw = noteDraft[key];
+    if (raw === undefined) return;
+    setNoteDraft((d) => {
+      const c = { ...d };
+      delete c[key];
+      return c;
+    });
+    if (raw === (ledgerNotes.get(key) ?? "")) return; // bez zmiany — nie śmiecimy ledgera
+    update((r) =>
+      recordCountNote(r, {
+        productId,
+        presentationId,
+        note: raw,
         snapshotSource: source,
       }),
     );
@@ -182,6 +237,15 @@ export function AuditView({
     }
   }
 
+  /** Eksport w układzie sieci — zamyka audyt „na teraz", żeby nagłówek miał datę spisu. */
+  function exportForNetwork(format: "xlsx" | "csv") {
+    if (!audit) return;
+    const stamped = { ...audit, closedAt: audit.closedAt ?? new Date().toISOString() };
+    const rows = franchiseRowsFor(report, stamped, exportAll);
+    if (format === "xlsx") exportFranchiseXlsx(stamped, rows, report.settings);
+    else exportFranchiseCsv(stamped, rows, report.settings);
+  }
+
   function saveAudit() {
     if (!audit) return;
     const closed = { ...audit, closedAt: new Date().toISOString() };
@@ -215,8 +279,9 @@ export function AuditView({
             </select>
           </div>
           <div className="field">
-            <label>Próg tolerancji (szt)</label>
+            <label htmlFor="audit-tolerance">Próg tolerancji (szt)</label>
             <input
+              id="audit-tolerance"
               type="number"
               value={tolerance}
               onChange={(e) => setTolerance(e.target.value)}
@@ -226,8 +291,39 @@ export function AuditView({
             Zapisz audyt do raportu
           </button>
           <button className="ghost" onClick={() => audit && exportAuditCsv(audit)} disabled={!audit}>
-            Eksportuj CSV
+            Eksportuj CSV (nasz)
           </button>
+        </div>
+        <div className="row" style={{ marginTop: 8, alignItems: "center" }}>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Dla sieci (wzór „INWENTARYZACJA”):
+          </span>
+          <button
+            onClick={() => exportForNetwork("xlsx")}
+            disabled={!audit}
+            title="Plik .xlsx w układzie kolumn wzoru sieci"
+          >
+            Wzór sieci (XLSX)
+          </button>
+          <button
+            className="ghost"
+            onClick={() => exportForNetwork("csv")}
+            disabled={!audit}
+            title="Do wklejenia w arkusz online"
+          >
+            Wzór sieci (CSV)
+          </button>
+          <label
+            className="field"
+            style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+          >
+            <input
+              type="checkbox"
+              checked={exportAll}
+              onChange={(e) => setExportAll(e.target.checked)}
+            />
+            także pozycje bez stanu
+          </label>
         </div>
         {windowWarn && <p className="warn" style={{ marginBottom: 0 }}>{windowWarn}</p>}
         {stats && (
@@ -315,95 +411,19 @@ export function AuditView({
             {scanMsg}
           </p>
         )}
-        <table>
-          <thead>
-            <tr>
-              <th
-                className="sortable"
-                onClick={() => linesSort.toggle("productName")}
-              >
-                Produkt{linesSort.arrow("productName")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("systemStock")}
-              >
-                Stan Glofox{linesSort.arrow("systemStock")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("soldInWindow")}
-              >
-                Sprzedano (okno){linesSort.arrow("soldInWindow")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("physicalCount")}
-              >
-                Spis fizyczny{linesSort.arrow("physicalCount")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("manko")}
-              >
-                Manko{linesSort.arrow("manko")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("mankoValue")}
-              >
-                Wartość (zł){linesSort.arrow("mankoValue")}
-              </th>
-              <th
-                className="num sortable"
-                onClick={() => linesSort.toggle("bookDiscrepancy")}
-              >
-                Rozb. księgowa{linesSort.arrow("bookDiscrepancy")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {linesSort.sorted.map((l, i) => {
-              const key = variantKey(l.productId, l.presentationId);
-              return (
-                <tr key={key}>
-                  <td>{l.productName}</td>
-                  <td className="num">{l.systemStock}</td>
-                  <td className="num muted">
-                    {l.soldInWindow === null ? "—" : l.soldInWindow}
-                  </td>
-                  <td className="num">
-                    <input
-                      ref={(el) => {
-                        if (el) inputRefs.current.set(key, el);
-                        else inputRefs.current.delete(key);
-                      }}
-                      type="number"
-                      value={displayValue(key)}
-                      placeholder="—"
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, [key]: e.target.value }))
-                      }
-                      onBlur={() => commit(key, l.productId, l.presentationId)}
-                      onKeyDown={(e) =>
-                        onRowKeyDown(e, key, l.productId, l.presentationId, i)
-                      }
-                    />
-                  </td>
-                  <td className={`num ${l.flagged ? "flag" : ""}`}>
-                    {l.manko === null ? "—" : l.manko}
-                  </td>
-                  <td className={`num ${l.flagged ? "flag" : ""}`}>
-                    {l.mankoValue === null ? "—" : l.mankoValue.toFixed(2)}
-                  </td>
-                  <td className={`num ${l.bookDiscrepancy ? "flag" : "muted"}`}>
-                    {l.bookDiscrepancy === null ? "—" : l.bookDiscrepancy}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <AuditTable
+          sort={linesSort}
+          inputRefs={inputRefs}
+          countValue={displayValue}
+          onCountChange={(key, value) => setDraft((d) => ({ ...d, [key]: value }))}
+          onCountCommit={commit}
+          onCountKeyDown={onRowKeyDown}
+          noteValue={displayNote}
+          onNoteChange={(key, value) =>
+            setNoteDraft((d) => ({ ...d, [key]: value }))
+          }
+          onNoteCommit={commitNote}
+        />
         <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
           Skan EAN ustawia fokus na polu spisu (tryb +1 = dolicza sztukę). Enter zatwierdza
           i przechodzi dalej. Spis zapisuje się na bieżąco do pliku — F5 nic nie kasuje.

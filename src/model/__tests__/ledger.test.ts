@@ -8,6 +8,8 @@ import {
   recordDelivery,
   recordPhysicalCount,
   physicalCountMap,
+  recordCountNote,
+  countNoteMap,
 } from "../ledger";
 
 function snap(capturedAt: string): GlofoxSnapshot {
@@ -115,5 +117,59 @@ describe("sumDeltasInWindow", () => {
       "2026-06-10T00:00:00.000Z",
     );
     expect(sums.get("P1::V1")).toBe(10); // druga dostawa poza oknem
+  });
+});
+
+describe("recordCountNote / countNoteMap", () => {
+  const SRC = "2026-06-01T20:00:00.000Z";
+
+  it("zapisuje uwagę do pozycji spisu, przypiętą do snapshotu", () => {
+    let r = ingestSnapshot(emptyReport(), snap(SRC));
+    r = recordCountNote(r, {
+      productId: "P1",
+      presentationId: "V1",
+      note: "stłuczka",
+      snapshotSource: SRC,
+    });
+
+    expect(countNoteMap(r.ledger, SRC).get("P1::V1")).toBe("stłuczka");
+  });
+
+  it("najnowsza uwaga wygrywa, ślad poprzedniej zostaje w ledgerze", () => {
+    let r = ingestSnapshot(emptyReport(), snap(SRC));
+    const base = { productId: "P1", presentationId: "V1", snapshotSource: SRC };
+    r = recordCountNote(r, { ...base, note: "stłuczka" });
+    r = recordCountNote(r, { ...base, note: "zwrot do dostawcy" });
+
+    expect(countNoteMap(r.ledger, SRC).get("P1::V1")).toBe("zwrot do dostawcy");
+    expect(r.ledger.filter((e) => e.type === "COUNT_NOTE")).toHaveLength(2);
+  });
+
+  it("nie miesza uwag między sesjami spisu", () => {
+    let r = ingestSnapshot(emptyReport(), snap(SRC));
+    r = ingestSnapshot(r, snap("2026-06-08T20:00:00.000Z"));
+    r = recordCountNote(r, {
+      productId: "P1",
+      presentationId: "V1",
+      note: "stłuczka",
+      snapshotSource: SRC,
+    });
+
+    expect(countNoteMap(r.ledger, "2026-06-08T20:00:00.000Z").size).toBe(0);
+  });
+
+  it("REGRESJA: uwaga nie zmienia matematyki stanu (nie jest deltą)", () => {
+    let r = ingestSnapshot(emptyReport(), snap(SRC));
+    const before = sumDeltasInWindow(r.ledger, "ADJUSTMENT", "0", "9999");
+    r = recordCountNote(r, {
+      productId: "P1",
+      presentationId: "V1",
+      note: "stłuczka",
+      snapshotSource: SRC,
+    });
+    const after = sumDeltasInWindow(r.ledger, "ADJUSTMENT", "0", "9999");
+
+    expect(after).toEqual(before);
+    expect([...after.values()]).toEqual([]);
   });
 });

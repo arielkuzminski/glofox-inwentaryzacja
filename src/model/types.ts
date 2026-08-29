@@ -49,6 +49,7 @@ export type LedgerEventType =
   | "DELIVERY" // dostawa (delta dodatnia)
   | "SALES_IMPORT" // sprzedaż z endpointu (delta ujemna)
   | "PHYSICAL_COUNT" // spis z natury (absolutny)
+  | "COUNT_NOTE" // uwaga do pozycji spisu (qty=0, nie rusza stanu)
   | "ADJUSTMENT"; // ręczna korekta (delta)
 
 export interface LedgerEvent {
@@ -60,6 +61,7 @@ export interface LedgerEvent {
   /**
    * SNAPSHOT / PHYSICAL_COUNT → wartość ABSOLUTNA (zaobserwowany stan).
    * DELIVERY / SALES_IMPORT / ADJUSTMENT → DELTA (sprzedaż ujemna).
+   * COUNT_NOTE → zawsze 0; treść jest w `note`.
    */
   qty: number;
   unitPrice?: number;
@@ -90,6 +92,8 @@ export interface AuditLine {
   expectedFromBook: number | null;
   /** bookDiscrepancy = systemStock - expectedFromBook (błąd ewidencji w Glofox). */
   bookDiscrepancy: number | null;
+  /** Uwaga wpisana przy spisie (kolumna „Uwagi" wzoru sieci). */
+  note: string | null;
   /** Czy |manko| przekracza próg tolerancji. */
   flagged: boolean;
 }
@@ -104,6 +108,33 @@ export interface Audit {
   lines: AuditLine[];
 }
 
+/**
+ * Partia towaru z krótką datą ważności. ŚWIADOMIE POZA LEDGEREM: nie zmienia stanu
+ * magazynowego, a jeden wariant może mieć wiele partii o różnych datach — wzorzec
+ * append-only „latest wins" (jak PHYSICAL_COUNT) by tu nie zadziałał.
+ */
+export interface ExpiryBatch {
+  id: string;
+  productId: string;
+  presentationId: string;
+  /** YYYY-MM-DD — data z opakowania. */
+  expiryDate: string;
+  qty: number;
+  note?: string;
+  createdAt: string; // ISO
+  /** Wycofane ze sprzedaży / sprzedane — soft delete, ślad audytu zostaje. */
+  removedAt?: string;
+}
+
+export interface Settings {
+  /** Nazwa klubu do nagłówka wzoru sieci (komórka B2). Wpisywana ręcznie. */
+  clubName?: string;
+  /** Ile dni przed datą ważności traktujemy partię jako „krótką datę". */
+  expiryWarnDays: number;
+  /** Domyślny próg tolerancji audytu (szt). */
+  toleranceUnits: number;
+}
+
 /** Kanoniczny, trwały stan modułu — eksportowany do JSON i importowany z powrotem. */
 export interface ReportState {
   schemaVersion: number;
@@ -116,7 +147,22 @@ export interface ReportState {
   audits: Audit[];
   /** Okno sprzedaży per snapshot (source → zakres dat) — do kontroli pokrycia. */
   snapshotWindows?: Record<string, { from?: string; to?: string }>;
+  /** Partie z datami ważności (kolumny F/G wzoru sieci). */
+  expiryBatches: ExpiryBatch[];
+  /** variantKey -> stan minimalny, na którym opiera się rekomendacja zamówienia. */
+  minStock: Record<string, number>;
+  settings: Settings;
 }
+
+/**
+ * Kształt raportu wczytanego z pliku: starsze pliki nie mają pól dodanych później.
+ * `normalizeReport` (storage/file.ts) jest granicą, za którą ReportState jest kompletny.
+ */
+export type LoadedReport = Omit<
+  ReportState,
+  "expiryBatches" | "minStock" | "settings"
+> &
+  Partial<Pick<ReportState, "expiryBatches" | "minStock" | "settings">>;
 
 export function emptyReport(): ReportState {
   return {
@@ -125,6 +171,9 @@ export function emptyReport(): ReportState {
     catalog: [],
     ledger: [],
     audits: [],
+    expiryBatches: [],
+    minStock: {},
+    settings: { expiryWarnDays: 30, toleranceUnits: 0 },
   };
 }
 

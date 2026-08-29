@@ -121,3 +121,23 @@ describe("summarizeAudit", () => {
     expect(s.totalMankoValue).toBe(100);
   });
 });
+
+describe("computeAudit — uwagi do pozycji", () => {
+  it("przenosi uwagę z ledgera do linii audytu", () => {
+    const r = ingestSnapshot(emptyReport(), snap("2026-06-01T20:00:00.000Z", 100));
+    const audit = computeAudit(
+      r,
+      "2026-06-01T20:00:00.000Z",
+      new Map([[KEY, 98]]),
+      0,
+      new Map([[KEY, "stłuczka"]]),
+    );
+    expect(audit.lines[0].note).toBe("stłuczka");
+  });
+
+  it("note = null, gdy uwagi nie ma", () => {
+    const r = ingestSnapshot(emptyReport(), snap("2026-06-01T20:00:00.000Z", 100));
+    const audit = computeAudit(r, "2026-06-01T20:00:00.000Z", new Map(), 0);
+    expect(audit.lines[0].note).toBeNull();
+  });
+});

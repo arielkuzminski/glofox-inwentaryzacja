@@ -8,7 +8,7 @@
 // klasycznego importu/eksportu.
 
 import { ReportState } from "../model/types";
-import { assertSchema, isReport } from "./file";
+import { assertSchema, isReport, normalizeReport } from "./file";
 
 type FsPermissionState = "granted" | "denied" | "prompt";
 
@@ -86,7 +86,7 @@ export async function readReport(handle: DataFileHandle): Promise<ReportState> {
     throw new Error("Plik danych nie jest poprawnym raportem.");
   }
   assertSchema(data.schemaVersion);
-  return data;
+  return normalizeReport(data);
 }
 
 /** Jednorazowy zapis raportu do pliku (atomowo: close commituje swap). */

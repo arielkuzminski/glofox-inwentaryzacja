@@ -1,7 +1,13 @@
 import { useMemo } from "react";
 import { ReportState } from "../model/types";
 import { summarizeAudit } from "../model/reconcile";
+import { compareAudits } from "../model/compare";
 import { exportAuditCsv } from "../storage/file";
+import {
+  franchiseRowsFor,
+  exportFranchiseCsv,
+  exportFranchiseXlsx,
+} from "../storage/franchise";
 import { useSort } from "./useSort";
 
 export function ReportView({ report }: { report: ReportState }) {
@@ -25,6 +31,14 @@ export function ReportView({ report }: { report: ReportState }) {
     mankoValue: (x) => x.summary.totalMankoValue,
   });
 
+  // Dwa ostatnie spisy: powtórka manka na tym samym produkcie to wzorzec,
+  // a nie pomyłka w liczeniu — dlatego to najmocniejszy sygnał w całym module.
+  const recurring = useMemo(() => {
+    if (audits.length < 2) return [];
+    const [curr, prev] = audits; // audits są posortowane malejąco po dacie
+    return compareAudits(prev, curr, curr.toleranceUnits).filter((l) => l.recurring);
+  }, [audits]);
+
   return (
     <>
       <div className="panel">
@@ -41,7 +55,63 @@ export function ReportView({ report }: { report: ReportState }) {
           <span className="v">{report.audits.length}</span>
           <div className="l">zapisanych audytów</div>
         </span>
+        {summaries.length > 0 && (
+          <span className="stat">
+            <span
+              className={`v ${summaries[0].summary.totalMankoValue ? "danger" : ""}`}
+            >
+              {summaries[0].summary.totalMankoValue.toFixed(2)}
+            </span>
+            <div className="l">
+              manko ostatniego spisu (zł)
+              {summaries.length > 1 && (
+                <>
+                  {" "}
+                  — poprzednio {summaries[1].summary.totalMankoValue.toFixed(2)} zł
+                </>
+              )}
+            </div>
+          </span>
+        )}
       </div>
+
+      {audits.length >= 2 && (
+        <div className="panel">
+          <h2>Powtarzające się manka (dwa ostatnie spisy)</h2>
+          {recurring.length === 0 ? (
+            <p className="empty">
+              Żadna pozycja nie powtórzyła manka — pojedyncze odchylenia to zwykle
+              pomyłki w liczeniu.
+            </p>
+          ) : (
+            <>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Produkt</th>
+                    <th className="num">Manko poprzednio</th>
+                    <th className="num">Manko teraz</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recurring.map((l) => (
+                    <tr key={`${l.productId}::${l.presentationId}`}>
+                      <td>{l.productName}</td>
+                      <td className="num flag">{l.mankoPrev}</td>
+                      <td className="num flag">{l.mankoCurr}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
+                Ten sam produkt znika dwa spisy z rzędu w tym samym kierunku. Pomyłka
+                w liczeniu się nie powtarza — to sygnał do sprawdzenia, kto stał na
+                kasie (zakładka Sprzedaż) i czy towar nie jest rozdawany.
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="panel">
         <h2>Zapisane audyty</h2>
@@ -120,8 +190,35 @@ export function ReportView({ report }: { report: ReportState }) {
                         className="ghost"
                         style={{ padding: "2px 8px" }}
                         onClick={() => exportAuditCsv(a)}
+                        title="Nasz CSV z manko i rozbieżnością księgową"
                       >
                         CSV
+                      </button>{" "}
+                      <button
+                        style={{ padding: "2px 8px" }}
+                        onClick={() =>
+                          exportFranchiseXlsx(
+                            a,
+                            franchiseRowsFor(report, a),
+                            report.settings,
+                          )
+                        }
+                        title="Plik dla sieci w układzie wzoru"
+                      >
+                        Wzór XLSX
+                      </button>{" "}
+                      <button
+                        className="ghost"
+                        style={{ padding: "2px 8px" }}
+                        onClick={() =>
+                          exportFranchiseCsv(
+                            a,
+                            franchiseRowsFor(report, a),
+                            report.settings,
+                          )
+                        }
+                      >
+                        Wzór CSV
                       </button>
                     </td>
                   </tr>

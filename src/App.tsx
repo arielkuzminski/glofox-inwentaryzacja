@@ -7,6 +7,7 @@ import {
   isSnapshot,
   readJsonFile,
   assertSchema,
+  normalizeReport,
 } from "./storage/file";
 import { clearDraft } from "./storage/local";
 import { emptyReport } from "./model/types";
@@ -15,9 +16,34 @@ import { SnapshotView } from "./ui/SnapshotView";
 import { DeliveriesView } from "./ui/DeliveriesView";
 import { SalesView } from "./ui/SalesView";
 import { AuditView } from "./ui/AuditView";
+import { ExpiryView } from "./ui/ExpiryView";
+import { OrdersView } from "./ui/OrdersView";
 import { ReportView } from "./ui/ReportView";
+import { SettingsView } from "./ui/SettingsView";
 
-type Tab = "bridge" | "snapshot" | "deliveries" | "sales" | "audit" | "report";
+type Tab =
+  | "bridge"
+  | "snapshot"
+  | "deliveries"
+  | "sales"
+  | "audit"
+  | "expiry"
+  | "orders"
+  | "report"
+  | "settings";
+
+/** Kolejność zakładek = kolejność tygodniowego przepływu pracy w klubie. */
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "bridge", label: "Pobierz dane" },
+  { id: "snapshot", label: "Stan / Snapshoty" },
+  { id: "deliveries", label: "Dostawy" },
+  { id: "sales", label: "Sprzedaż" },
+  { id: "audit", label: "Spis (audyt)" },
+  { id: "expiry", label: "Daty ważności" },
+  { id: "orders", label: "Zamówienia" },
+  { id: "report", label: "Raport" },
+  { id: "settings", label: "Ustawienia" },
+];
 
 export function App() {
   const { report, update, replace, persist } = useReport();
@@ -53,7 +79,7 @@ export function App() {
         );
       } else if (isReport(data)) {
         assertSchema(data.schemaVersion);
-        replace(data);
+        replace(normalizeReport(data));
         setMsg(`Wczytano raport z ${data.generatedAt}.`);
       } else {
         setErr("Nie rozpoznano pliku — to ani snapshot, ani raport.");
@@ -74,8 +100,8 @@ export function App() {
     <div className="app">
       <h1>Glofox — Inwentaryzacja</h1>
       <p className="subtitle">
-        Kontrola ubytków: manko = stan Glofox − spis z natury. Dane zapisują się
-        same do wybranego pliku — bez ręcznego eksportu/importu.
+        Spis, krótkie daty, zamówienia i kontrola ubytków w jednym miejscu. Manko =
+        stan Glofox − spis z natury. Dane zapisują się same do wybranego pliku.
       </p>
 
       <div className="panel">
@@ -142,42 +168,15 @@ export function App() {
       </div>
 
       <div className="tabs">
-        <button
-          className={`tab ${tab === "bridge" ? "active" : ""}`}
-          onClick={() => setTab("bridge")}
-        >
-          Pobierz dane
-        </button>
-        <button
-          className={`tab ${tab === "snapshot" ? "active" : ""}`}
-          onClick={() => setTab("snapshot")}
-        >
-          Stan / Snapshoty
-        </button>
-        <button
-          className={`tab ${tab === "deliveries" ? "active" : ""}`}
-          onClick={() => setTab("deliveries")}
-        >
-          Dostawy
-        </button>
-        <button
-          className={`tab ${tab === "sales" ? "active" : ""}`}
-          onClick={() => setTab("sales")}
-        >
-          Sprzedaż
-        </button>
-        <button
-          className={`tab ${tab === "audit" ? "active" : ""}`}
-          onClick={() => setTab("audit")}
-        >
-          Audyt (spis)
-        </button>
-        <button
-          className={`tab ${tab === "report" ? "active" : ""}`}
-          onClick={() => setTab("report")}
-        >
-          Raport
-        </button>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`tab ${tab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {tab === "bridge" && <BridgeView />}
@@ -187,7 +186,10 @@ export function App() {
       )}
       {tab === "sales" && <SalesView report={report} />}
       {tab === "audit" && <AuditView report={report} update={update} />}
+      {tab === "expiry" && <ExpiryView report={report} update={update} />}
+      {tab === "orders" && <OrdersView report={report} update={update} />}
       {tab === "report" && <ReportView report={report} />}
+      {tab === "settings" && <SettingsView report={report} update={update} />}
     </div>
   );
 }

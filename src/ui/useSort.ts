@@ -3,6 +3,9 @@ import { useMemo, useState } from "react";
 export type SortDir = "asc" | "desc";
 export type SortAccessors<T> = Record<string, (row: T) => string | number | null>;
 
+/** Publiczny kształt API sortowania — do przekazania komponentom prezentacyjnym. */
+export type SortApi<T> = ReturnType<typeof useSort<T>>;
+
 export function useSort<T>(rows: T[], accessors: SortAccessors<T>) {
   const [key, setKey] = useState<string | null>(null);
   const [dir, setDir] = useState<SortDir>("asc");
