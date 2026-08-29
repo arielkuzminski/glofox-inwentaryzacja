@@ -10,13 +10,20 @@ import {
 } from "./types";
 
 let idCounter = 0;
+/**
+ * Identyfikator zdarzenia. Człon losowy jest ISTOTNY: scalanie plików z dwóch
+ * komputerów rozpoznaje duplikaty po id, a licznik startuje od zera przy każdym
+ * otwarciu strony — bez losowości dwa stanowiska mogłyby wygenerować to samo id
+ * i jedno zdarzenie zniknęłoby po cichu przy imporcie.
+ */
 export function genId(prefix = "ev"): string {
   idCounter += 1;
-  return `${prefix}_${Date.now().toString(36)}_${idCounter.toString(36)}`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}_${Date.now().toString(36)}_${idCounter.toString(36)}_${rand}`;
 }
 
 /** Scala katalog: nowy snapshot nadpisuje/ dodaje produkty, znikłe zostają (po _id). */
-function mergeCatalog(existing: Product[], incoming: Product[]): Product[] {
+export function mergeCatalog(existing: Product[], incoming: Product[]): Product[] {
   const byId = new Map<string, Product>();
   for (const p of existing) byId.set(p.productId, p);
   for (const p of incoming) byId.set(p.productId, p); // świeży payload wygrywa

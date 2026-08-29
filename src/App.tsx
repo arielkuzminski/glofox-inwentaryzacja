@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useReport, type PersistStatus } from "./state/store";
 import { ingestSnapshot } from "./model/ledger";
+import { mergeReports } from "./model/merge";
 import {
   exportReport,
   isReport,
@@ -77,8 +78,15 @@ export function App() {
         );
       } else if (isReport(data)) {
         assertSchema(data.schemaVersion);
-        replace(normalizeReport(data));
-        setMsg(`Wczytano raport z ${data.generatedAt}.`);
+        // SCALANIE, nie nadpisanie: plik z drugiego komputera ma dołożyć swoją
+        // pracę, a nie skasować tutejszą. Ledger jest append-only, więc suma
+        // po id jest bezstratna i idempotentna.
+        const { report: merged, stats } = mergeReports(report, normalizeReport(data));
+        replace(merged);
+        setMsg(
+          `Scalono plik z ${data.generatedAt.slice(0, 10)}: +${stats.events} zdarzeń, ` +
+            `+${stats.audits} audytów, +${stats.batches} partii.`,
+        );
       } else {
         setErr("Nie rozpoznano pliku — to ani snapshot, ani raport.");
       }

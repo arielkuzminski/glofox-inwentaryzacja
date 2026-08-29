@@ -112,7 +112,29 @@ try {
   );
   log("po F5 spis na miejscu");
 
-  // 7) Eksport dla sieci + weryfikacja zawartości pobranego pliku.
+  // 7) Roundtrip scalania: eksport kopii JSON i ponowny import tego samego pliku
+  //    ma być bezstratny i idempotentny (+0 zdarzeń, spis nietknięty).
+  const [copy] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Eksportuj kopię (JSON)" }).click(),
+  ]);
+  const copyPath = resolve(OUT, copy.suggestedFilename());
+  await copy.saveAs(copyPath);
+  await page.setInputFiles('input[type="file"]', copyPath);
+  const mergeMsg = (await page.locator("p.ok").first().textContent())?.trim() ?? "";
+  assert.match(mergeMsg, /^Scalono plik/, `spodziewano się komunikatu o scaleniu, było: ${mergeMsg}`);
+  assert.match(mergeMsg, /\+0 zdarzeń/, `ponowny import nie może nic dokładać: ${mergeMsg}`);
+  await page.getByRole("button", { name: "Spis (audyt)" }).click();
+  await page.getByPlaceholder("zeskanuj kod albo wpisz: woda 0.75").fill("woda kropla 0.75");
+  await page.waitForTimeout(300);
+  assert.equal(
+    await page.locator("tbody tr").first().locator("td").nth(4).textContent(),
+    "8",
+    "scalanie zgubiło spis",
+  );
+  log("scalanie: ponowny import tego samego pliku niczego nie zmienił");
+
+  // 8) Eksport dla sieci + weryfikacja zawartości pobranego pliku.
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "Wzór sieci (XLSX)" }).click(),

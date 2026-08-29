@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emptyReport, ReportState } from "../model/types";
+import { mergeReports } from "../model/merge";
 import { loadDraftMigrating, saveDraft, clearDraft } from "../storage/draftStore";
 import { ensurePermission, WriteQueue } from "../storage/fileSystem";
 import {
@@ -88,7 +89,12 @@ export function useReport() {
           try {
             const loaded = await readReportFromDir(handle);
             if (cancelled) return;
-            if (loaded) setReport((cur) => (isPristine(cur) ? loaded : cur));
+            // Gdy użytkownik zdążył już coś zrobić, folder nie kasuje jego pracy —
+            // scalamy (ledger jest append-only, więc suma jest bezstratna).
+            if (loaded)
+              setReport((cur) =>
+                isPristine(cur) ? loaded : mergeReports(cur, loaded).report,
+              );
             await attach(handle);
           } catch {
             // folder zniknął/uszkodzony — zostaw stan z pamięci, traktuj jak rozłączony
