@@ -1,67 +1,20 @@
-// Trwałe przechowanie uchwytu pliku (FileSystemFileHandle) w IndexedDB.
-// Handle jest structured-cloneable, więc przeżywa reload — to jedyny powód, dla
-// którego dotykamy IDB (dane mieszkają w pliku, nie tutaj). localStorage nie
-// nadaje się: serializuje do stringa i gubi uchwyt.
+// Trwałe przechowanie uchwytu folderu danych (FileSystemDirectoryHandle) w IndexedDB.
+// Handle jest structured-cloneable, więc przeżywa reload — localStorage by go zgubił
+// (serializuje do stringa).
 
-import { DataFileHandle } from "./fileSystem";
+import { DataDirHandle } from "./dataDir";
+import { idbDelete, idbGet, idbPut } from "./idb";
 
-const DB_NAME = "glofox-inwentaryzacja";
-const STORE = "kv";
-const KEY = "dataFileHandle";
+const KEY = "dataDirHandle";
 
-function idbSupported(): boolean {
-  return typeof indexedDB !== "undefined";
+export async function saveHandle(handle: DataDirHandle): Promise<void> {
+  await idbPut(KEY, handle);
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) {
-        req.result.createObjectStore(STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function tx<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return openDb().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const t = db.transaction(STORE, mode);
-        const req = run(t.objectStore(STORE));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-        t.oncomplete = () => db.close();
-      }),
-  );
-}
-
-export async function saveHandle(handle: DataFileHandle): Promise<void> {
-  if (!idbSupported()) return;
-  await tx("readwrite", (s) => s.put(handle, KEY));
-}
-
-export async function loadHandle(): Promise<DataFileHandle | null> {
-  if (!idbSupported()) return null;
-  try {
-    const h = await tx<DataFileHandle | undefined>("readonly", (s) => s.get(KEY));
-    return h ?? null;
-  } catch {
-    return null;
-  }
+export async function loadHandle(): Promise<DataDirHandle | null> {
+  return idbGet<DataDirHandle>(KEY);
 }
 
 export async function clearHandle(): Promise<void> {
-  if (!idbSupported()) return;
-  try {
-    await tx("readwrite", (s) => s.delete(KEY));
-  } catch {
-    // best-effort
-  }
+  await idbDelete(KEY);
 }

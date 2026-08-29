@@ -16,6 +16,12 @@ interface FsPermissionDescriptor {
   mode: "read" | "readwrite";
 }
 
+/** Wspólny mianownik uchwytu pliku i folderu — tyle wystarczy do zgód. */
+export interface PermissionAware {
+  queryPermission(desc: FsPermissionDescriptor): Promise<FsPermissionState>;
+  requestPermission(desc: FsPermissionDescriptor): Promise<FsPermissionState>;
+}
+
 /** Wycinek FileSystemFileHandle, którego używamy (typy FS Access nie są w lib.dom). */
 export interface DataFileHandle {
   readonly name: string;
@@ -69,7 +75,7 @@ export async function pickExistingFile(): Promise<DataFileHandle> {
  * z gestu użytkownika (Chromium wymaga go do requestPermission po reloadzie).
  */
 export async function ensurePermission(
-  handle: DataFileHandle,
+  handle: PermissionAware,
   interactive: boolean,
 ): Promise<boolean> {
   const desc: FsPermissionDescriptor = { mode: "readwrite" };

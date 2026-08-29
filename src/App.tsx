@@ -9,8 +9,6 @@ import {
   assertSchema,
   normalizeReport,
 } from "./storage/file";
-import { clearDraft } from "./storage/local";
-import { emptyReport } from "./model/types";
 import { BridgeView } from "./ui/BridgeView";
 import { SnapshotView } from "./ui/SnapshotView";
 import { DeliveriesView } from "./ui/DeliveriesView";
@@ -46,7 +44,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 ];
 
 export function App() {
-  const { report, update, replace, persist } = useReport();
+  const { report, update, replace, reset, persist } = useReport();
   const [tab, setTab] = useState<Tab>("snapshot");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -90,10 +88,8 @@ export function App() {
   }
 
   function onReset() {
-    if (!confirm("Wyczyścić cały stan (autosave + bieżące dane)?")) return;
-    clearDraft();
-    replace(emptyReport());
-    setMsg("Wyczyszczono stan.");
+    if (!confirm("Wyczyścić cały stan (kopia awaryjna + bieżące dane)?")) return;
+    void reset().then(() => setMsg("Wyczyszczono stan."));
   }
 
   return (
@@ -108,40 +104,42 @@ export function App() {
         <div className="row" style={{ alignItems: "center" }}>
           <PersistBadge persist={persist} />
           {persist.status === "connected" ? (
-            <button
-              className="ghost"
-              onClick={() =>
-                runPersist(persist.disconnect, "Odłączono plik — dane zostają w przeglądarce.")
-              }
-            >
-              Odłącz plik
-            </button>
-          ) : persist.status === "needs-permission" ? (
-            <button
-              onClick={() =>
-                runPersist(persist.reconnect, "Wznowiono auto-zapis do pliku.")
-              }
-            >
-              Wznów zapis do pliku
-            </button>
-          ) : persist.status === "disconnected" ? (
             <>
               <button
                 onClick={() =>
-                  runPersist(persist.connectNew, "Utworzono plik danych — auto-zapis włączony.")
+                  runPersist(persist.backupNow, "Zapisano kopię zapasową.")
                 }
               >
-                Utwórz plik danych
+                Zrób kopię teraz
               </button>
               <button
                 className="ghost"
                 onClick={() =>
-                  runPersist(persist.connectExisting, "Wczytano plik danych — auto-zapis włączony.")
+                  runPersist(persist.disconnect, "Odłączono folder — dane zostają w przeglądarce.")
                 }
               >
-                Otwórz plik danych
+                Odłącz folder
               </button>
             </>
+          ) : persist.status === "needs-permission" ? (
+            <button
+              onClick={() =>
+                runPersist(persist.reconnect, "Wznowiono auto-zapis do folderu.")
+              }
+            >
+              Wznów zapis do folderu
+            </button>
+          ) : persist.status === "disconnected" ? (
+            <button
+              onClick={() =>
+                runPersist(
+                  persist.connectDirectory,
+                  "Podpięto folder danych — auto-zapis i kopie włączone.",
+                )
+              }
+            >
+              Wybierz folder danych
+            </button>
           ) : null}
         </div>
 
@@ -197,20 +195,25 @@ export function App() {
 function PersistBadge({
   persist,
 }: {
-  persist: { status: PersistStatus; fileName: string | null };
+  persist: { status: PersistStatus; dirName: string | null; lastBackup: string | null };
 }) {
   const map: Record<PersistStatus, { text: string; cls: string }> = {
     connected: {
-      text: `Zapisywane do ${persist.fileName ?? "pliku"} ✓`,
+      text:
+        `Zapisywane do folderu ${persist.dirName ?? ""} ✓` +
+        (persist.lastBackup ? ` · kopia z ${persist.lastBackup}` : ""),
       cls: "ok",
     },
     "needs-permission": {
-      text: `Plik ${persist.fileName ?? ""} czeka na zgodę →`,
+      text: `Folder ${persist.dirName ?? ""} czeka na zgodę →`,
       cls: "warn",
     },
-    disconnected: { text: "Tylko w przeglądarce — podłącz plik", cls: "warn" },
+    disconnected: {
+      text: "Tylko w przeglądarce — wskaż folder danych",
+      cls: "warn",
+    },
     unsupported: {
-      text: "Ta przeglądarka nie wspiera auto-zapisu (użyj import/eksport)",
+      text: "Ta przeglądarka nie zapisze do folderu (użyj Chrome/Edge; tu działa import/eksport)",
       cls: "muted",
     },
   };

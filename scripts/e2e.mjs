@@ -81,7 +81,9 @@ try {
   // 4) Krótka data ważności.
   await page.getByRole("button", { name: "Daty ważności" }).click();
   await page.getByPlaceholder("np. baton albo 5900617013064").fill("woda kropla 0.75");
-  await page.getByRole("button", { name: "Wybierz" }).first().click();
+  // exact: true — inaczej dopasuje się nagłówkowe „Wybierz folder danych"
+  // (Playwright szuka nazwy roli FRAGMENTEM).
+  await page.getByRole("button", { name: "Wybierz", exact: true }).first().click();
   await page.locator("#exp-date").fill("2026-07-05");
   await page.locator("#exp-qty").fill("3");
   await page.getByRole("button", { name: "Dodaj partię" }).click();

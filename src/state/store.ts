@@ -1,74 +1,105 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ReportState } from "../model/types";
-import { freshReport, saveDraft } from "../storage/local";
+import { emptyReport, ReportState } from "../model/types";
+import { loadDraftMigrating, saveDraft, clearDraft } from "../storage/draftStore";
+import { ensurePermission, WriteQueue } from "../storage/fileSystem";
 import {
-  DataFileHandle,
-  WriteQueue,
-  ensurePermission,
-  isFsAccessSupported,
-  pickExistingFile,
-  pickNewFile,
-  readReport,
-  writeReport,
-} from "../storage/fileSystem";
+  DataDirHandle,
+  isDirPickerSupported,
+  listBackups,
+  localDay,
+  pickDataDirectory,
+  readReportFromDir,
+  writeBackup,
+  writeReportToDir,
+} from "../storage/dataDir";
 import { clearHandle, loadHandle, saveHandle } from "../storage/handleStore";
 
 const WRITE_DEBOUNCE_MS = 600;
 
 export type PersistStatus =
   | "unsupported" // przeglądarka bez File System Access — tryb import/eksport
-  | "disconnected" // brak wybranego pliku — dane tylko w przeglądarce
-  | "needs-permission" // plik znany z poprzedniej sesji, czeka na zgodę (gest)
-  | "connected"; // auto-zapis do pliku działa
+  | "disconnected" // brak wybranego folderu — dane tylko w przeglądarce (IndexedDB)
+  | "needs-permission" // folder znany z poprzedniej sesji, czeka na zgodę (gest)
+  | "connected"; // auto-zapis do folderu działa
+
+/**
+ * Czy stan jest jeszcze nietknięty. Odczyt kopii z IndexedDB jest ASYNCHRONICZNY
+ * (localStorage był synchroniczny), więc bez tej bramki wynik odczytu potrafił
+ * wylądować już po tym, jak menadżer zaimportował snapshot — i skasować mu pracę.
+ */
+export function isPristine(r: ReportState): boolean {
+  return (
+    r.ledger.length === 0 &&
+    r.catalog.length === 0 &&
+    r.audits.length === 0 &&
+    r.expiryBatches.length === 0
+  );
+}
 
 function isAbort(e: unknown): boolean {
   return e instanceof DOMException && e.name === "AbortError";
 }
 
 /**
- * Centralny stan modułu. Kanonem jest plik na dysku (auto-zapis przez File System
- * Access); localStorage zostaje jako pas bezpieczeństwa i fallback dla przeglądarek
- * bez tego API.
+ * Centralny stan modułu. Kanonem jest `inwentaryzacja.json` we WSKAZANYM FOLDERZE
+ * (auto-zapis + dzienna kopia w `backups/`); IndexedDB trzyma kopię awaryjną na
+ * wypadek braku podpiętego folderu albo przeglądarki bez File System Access.
  */
 export function useReport() {
-  const [report, setReport] = useState<ReportState>(() => freshReport());
+  const [report, setReport] = useState<ReportState>(() => emptyReport());
   const [status, setStatus] = useState<PersistStatus>(() =>
-    isFsAccessSupported() ? "disconnected" : "unsupported",
+    isDirPickerSupported() ? "disconnected" : "unsupported",
   );
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [dirName, setDirName] = useState<string | null>(null);
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  /** Dopóki false, auto-zapis milczy — inaczej pusty stan startowy zamazałby kopię. */
+  const [restored, setRestored] = useState(false);
 
-  const handleRef = useRef<DataFileHandle | null>(null);
+  const dirRef = useRef<DataDirHandle | null>(null);
   const queueRef = useRef<WriteQueue | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Dni, na które kopia już istnieje — czytane z listingu folderu, więc samo się naprawia. */
+  const backupDaysRef = useRef<Set<string>>(new Set());
 
-  // Podpina uchwyt pliku jako aktywny cel auto-zapisu.
-  const attach = useCallback((handle: DataFileHandle) => {
-    handleRef.current = handle;
-    queueRef.current = new WriteQueue((r) => writeReport(handle, r));
-    setFileName(handle.name);
+  // Podpina folder jako aktywny cel auto-zapisu.
+  const attach = useCallback(async (handle: DataDirHandle) => {
+    dirRef.current = handle;
+    queueRef.current = new WriteQueue((r) => writeReportToDir(handle, r));
+    const days = (await listBackups(handle)).map((n) => n.slice(-15, -5));
+    backupDaysRef.current = new Set(days);
+    setLastBackup(days[days.length - 1] ?? null);
+    setDirName(handle.name);
     setStatus("connected");
   }, []);
 
-  // Próba wznowienia pliku z poprzedniej sesji (bez pytania o zgodę — brak gestu).
+  // Start: kopia awaryjna z IndexedDB (z jednorazową migracją ze starego localStorage),
+  // a potem — jeśli się da — folder z poprzedniej sesji jako kanon.
   useEffect(() => {
-    if (!isFsAccessSupported()) return;
     let cancelled = false;
     void (async () => {
-      const handle = await loadHandle();
-      if (cancelled || !handle) return;
-      if (await ensurePermission(handle, false)) {
-        try {
-          const loaded = await readReport(handle);
-          if (cancelled) return;
-          setReport(loaded);
-          attach(handle);
-        } catch {
-          // plik zniknął/uszkodzony — zostaw stan z pamięci, traktuj jak rozłączony
+      try {
+        const draft = await loadDraftMigrating();
+        if (!cancelled && draft) setReport((cur) => (isPristine(cur) ? draft : cur));
+        if (!isDirPickerSupported()) return;
+
+        const handle = await loadHandle();
+        if (cancelled || !handle) return;
+        if (await ensurePermission(handle, false)) {
+          try {
+            const loaded = await readReportFromDir(handle);
+            if (cancelled) return;
+            if (loaded) setReport((cur) => (isPristine(cur) ? loaded : cur));
+            await attach(handle);
+          } catch {
+            // folder zniknął/uszkodzony — zostaw stan z pamięci, traktuj jak rozłączony
+          }
+        } else {
+          dirRef.current = handle; // zachowaj do „Wznów zapis"
+          setDirName(handle.name);
+          setStatus("needs-permission");
         }
-      } else {
-        handleRef.current = handle; // zachowaj do „Wznów zapis"
-        setFileName(handle.name);
-        setStatus("needs-permission");
+      } finally {
+        if (!cancelled) setRestored(true); // od teraz auto-zapis wolno pisać
       }
     })();
     return () => {
@@ -76,15 +107,34 @@ export function useReport() {
     };
   }, [attach]);
 
-  // Auto-zapis: localStorage zawsze (fallback), plik z debounce gdy połączony.
+  // Auto-zapis: kopia awaryjna zawsze, plik w folderze z debounce gdy podpięty.
   useEffect(() => {
-    saveDraft(report);
+    if (!restored) return;
+    void saveDraft(report);
     if (status !== "connected" || !queueRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       queueRef.current?.enqueue(report);
+      void makeDailyBackup(report);
     }, WRITE_DEBOUNCE_MS);
-  }, [report, status]);
+    // makeDailyBackup jest stabilne (ref), więc nie trafia do zależności
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report, status, restored]);
+
+  /** Pierwszy zapis w danym dniu odkłada kopię do backups/ i przycina najstarsze. */
+  const makeDailyBackup = useCallback(async (r: ReportState) => {
+    const dir = dirRef.current;
+    if (!dir) return;
+    const day = localDay();
+    if (backupDaysRef.current.has(day)) return;
+    backupDaysRef.current.add(day); // najpierw znacznik — zapis nie może się zapętlić
+    try {
+      await writeBackup(dir, r, day);
+      setLastBackup(day);
+    } catch {
+      backupDaysRef.current.delete(day); // nie udało się — spróbuj przy kolejnym zapisie
+    }
+  }, []);
 
   const update = useCallback(
     (fn: (r: ReportState) => ReportState) => setReport((r) => fn(r)),
@@ -92,63 +142,73 @@ export function useReport() {
   );
   const replace = useCallback((r: ReportState) => setReport(r), []);
 
-  /** Tworzy nowy plik i od razu zrzuca do niego bieżący stan z pamięci. */
-  const connectNew = useCallback(async () => {
+  /**
+   * Wskazanie folderu danych. Jest w nim `inwentaryzacja.json`? To on jest kanonem.
+   * Nie ma? Zakładamy go z bieżącego stanu.
+   */
+  const connectDirectory = useCallback(async () => {
     try {
-      const handle = await pickNewFile();
+      const handle = await pickDataDirectory();
       if (!(await ensurePermission(handle, true))) return;
-      await writeReport(handle, report);
+      const existing = await readReportFromDir(handle);
+      if (existing) setReport(existing);
+      else await writeReportToDir(handle, report);
       await saveHandle(handle);
-      attach(handle);
+      await attach(handle);
     } catch (e) {
       if (!isAbort(e)) throw e;
     }
   }, [report, attach]);
 
-  /** Otwiera istniejący plik — jego treść staje się kanonem (nadpisuje pamięć). */
-  const connectExisting = useCallback(async () => {
-    try {
-      const handle = await pickExistingFile();
-      if (!(await ensurePermission(handle, true))) return;
-      const loaded = await readReport(handle);
-      await saveHandle(handle);
-      setReport(loaded);
-      attach(handle);
-    } catch (e) {
-      if (!isAbort(e)) throw e;
-    }
-  }, [attach]);
-
-  /** Wznawia zapis do pliku z poprzedniej sesji (wymaga gestu użytkownika). */
+  /** Wznawia zapis do folderu z poprzedniej sesji (wymaga gestu użytkownika). */
   const reconnect = useCallback(async () => {
-    const handle = handleRef.current;
+    const handle = dirRef.current;
     if (!handle) return;
     if (!(await ensurePermission(handle, true))) return;
-    const loaded = await readReport(handle);
-    setReport(loaded);
-    attach(handle);
+    const loaded = await readReportFromDir(handle);
+    if (loaded) setReport(loaded);
+    await attach(handle);
   }, [attach]);
 
-  /** Odłącza plik (dane zostają w pamięci i localStorage). */
+  /** Odłącza folder (dane zostają w pamięci i w kopii awaryjnej). */
   const disconnect = useCallback(async () => {
     await clearHandle();
-    handleRef.current = null;
+    dirRef.current = null;
     queueRef.current = null;
-    setFileName(null);
+    setDirName(null);
+    setLastBackup(null);
     setStatus("disconnected");
+  }, []);
+
+  /** Kopia na żądanie — nadpisuje kopię dzisiejszą. */
+  const backupNow = useCallback(async () => {
+    const dir = dirRef.current;
+    if (!dir) return;
+    const day = localDay();
+    await writeBackup(dir, report, day);
+    backupDaysRef.current.add(day);
+    setLastBackup(day);
+  }, [report]);
+
+  /** Czyści stan i kopię awaryjną (folder zostaje — plik nadpisze się przy zapisie). */
+  const reset = useCallback(async () => {
+    await clearDraft();
+    setReport(emptyReport());
   }, []);
 
   return {
     report,
     update,
     replace,
+    reset,
     persist: {
       status,
-      fileName,
-      connectNew,
-      connectExisting,
+      dirName,
+      lastBackup,
+      connectDirectory,
       reconnect,
       disconnect,
+      backupNow,
     },
   };
 }
