@@ -3,9 +3,10 @@
 Panel do prowadzenia inwentaryzacji sklepu w klubie: **spis, krótkie daty, zamówienia
 i kontrola ubytków** w jednym miejscu. Realizuje jednocześnie obowiązek wobec sieci
 franczyzowej (cotygodniowy spis do pliku „WZÓR INWENTARYZACJA”) i naszą kontrolę
-ubytków. **Bez backendu** — kanonem jest plik na dysku z
-**auto-zapisem** (File System Access API; uchwyt pliku w IndexedDB). localStorage to
-kopia awaryjna; w przeglądarkach bez tego API panel wraca do ręcznego eksportu/importu JSON.
+ubytków.
+
+**Panel działa z linku:** https://arielkuzminski.github.io/glofox-inwentaryzacja/ —
+menadżer klubu nie instaluje niczego.
 
 ## Po co to (logika biznesowa)
 
@@ -47,7 +48,33 @@ app.glofox.com  ──[bookmarklet: fetch listview + sprzedaż]──►  snapsh
 
 Bookmarklet/skrypt: `src/bridge/glofox-grab.bookmarklet.js`.
 
-## Uruchomienie
+## Hosting i dane
+
+**Bez backendu.** Hostujemy wyłącznie statyczny build (GitHub Pages, deploy z
+`.github/workflows/deploy.yml` przy każdym pushu do `main`) — **żadne dane klubu nie
+idą na serwer**. Snapshoty ciągnie bookmarklet z sesji menadżera, a stan mieszka na
+jego dysku:
+
+```
+Folder wskazany raz przez menadżera/
+  inwentaryzacja.json                 ← KANON, auto-zapis (File System Access)
+  backups/
+    inwentaryzacja-2026-08-22.json    ← kopia dnia, trzymamy 8 ostatnich
+              ↕
+        IndexedDB                     ← kopia awaryjna (uchwyt folderu + raport)
+```
+
+- **Dlaczego nie localStorage:** przy tygodniowym rytmie raport waży 506 KB po
+  pierwszym spisie i ~4,5 MB po dziesiątym, a limit to ~5 MB — i pękał po cichu.
+- **Kopie robią się same** przy pierwszym zapisie w danym dniu; jest też przycisk
+  „Zrób kopię teraz”.
+- **Przeniesienie na inny komputer:** skopiuj `inwentaryzacja.json` i zaimportuj —
+  panel **scala** oba stany po id zdarzeń (`src/model/merge.ts`), więc żadna praca
+  nie ginie, a powtórny import tego samego pliku niczego nie zmienia.
+- **Firefox** nie ma File System Access — tam kanonem jest IndexedDB, a wymiana
+  danych idzie przez ręczny eksport/import JSON.
+
+## Uruchomienie (rozwój)
 
 ```bash
 npm install
@@ -85,7 +112,7 @@ daty i uwagi — checkbox „także pozycje bez stanu” dokłada resztę katalo
 
 ## Przepływ pracy
 
-0. **Raz:** kliknij „Utwórz plik danych" (auto-zapis) i uzupełnij *Ustawienia*
+0. **Raz:** kliknij „Wybierz folder danych" (auto-zapis + kopie) i uzupełnij *Ustawienia*
    (nazwa klubu, próg krótkiej daty, domyślna tolerancja).
 1. **Pobierz snapshot** — zakładka *Pobierz dane*: przeciągnij bookmarklet „Glofox →
    snapshot" na pasek zakładek (raz), potem na zalogowanym `app.glofox.com` kliknij go.
@@ -105,8 +132,8 @@ daty i uwagi — checkbox „także pozycje bez stanu” dokłada resztę katalo
    „do zamówienia” i pokrycie w tygodniach. Eksport listy zakupowej do CSV.
 8. **Eksport dla sieci** — w *Spisie* i w *Raporcie*: „Wzór sieci (XLSX)" (gotowy plik)
    albo „(CSV)" (do wklejenia w arkusz online).
-9. **Auto-zapis do pliku** jest kanonem — nic nie eksportujesz ręcznie. Po reloadzie
-   ewentualnie „Wznów zapis do pliku". Ostrzeżenie, gdy okno sprzedaży nie pokrywa przerwy.
+9. **Auto-zapis do folderu** jest kanonem — nic nie eksportujesz ręcznie. Po reloadzie
+   ewentualnie „Wznów zapis do folderu". Ostrzeżenie, gdy okno sprzedaży nie pokrywa przerwy.
 
 > Snapshot i spis rób przy **zamkniętym sklepie** — sprzedaż w trakcie liczenia
 > zaburza wynik.
@@ -143,10 +170,13 @@ Do szybkiego testu UI bez Glofox jest `src/fixtures/sample-snapshot.json`.
 | `src/storage/franchise.ts` | wiersze wzoru sieci (**odwrócenie znaku**) + CSV |
 | `src/storage/xlsx.ts` | minimalny writer XLSX (ZIP „stored" + inlineStr, bez zależności) |
 | `src/storage/ordersCsv.ts` | lista zakupowa do CSV |
-| `src/storage/fileSystem.ts` | **auto-zapis do pliku** (File System Access) + WriteQueue |
-| `src/storage/handleStore.ts` | uchwyt pliku w IndexedDB (przeżywa reload) |
+| `src/model/merge.ts` | **scalanie plików** z dwóch komputerów (suma po id) |
+| `src/storage/fileSystem.ts` | zapis/odczyt pliku (File System Access) + WriteQueue |
+| `src/storage/dataDir.ts` | układ folderu danych: kanon + rotacja kopii |
+| `src/storage/idb.ts` | wspólny dostęp do IndexedDB |
+| `src/storage/draftStore.ts` | kopia awaryjna raportu w IDB (+ migracja z localStorage) |
+| `src/storage/handleStore.ts` | uchwyt folderu w IndexedDB (przeżywa reload) |
 | `src/storage/file.ts` | import/eksport JSON + eksport CSV audytu |
-| `src/storage/local.ts` | localStorage (fallback / kopia awaryjna) |
 | `scripts/build-bookmarklet.mjs` | minifikuje most → `bookmarklet.generated.ts` (link `javascript:`) |
 | `src/bridge/glofox-grab.bookmarklet.js` | most danych z app.glofox.com |
 | `src/ui/*` | zakładki: Pobierz dane, Stan, Dostawy, Sprzedaż, Spis, Daty ważności, Zamówienia, Raport, Ustawienia |

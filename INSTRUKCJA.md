@@ -4,10 +4,10 @@
 > lub przed otwarciem). Ten moduł robi jednym przejściem to, co trzeba oddać sieci
 > (plik „WZÓR INWENTARYZACJA”) **oraz** kontrolę ubytków, której w tamtym pliku nie ma.
 
-Moduł nie ma backendu, ale **dane zapisują się same do wybranego pliku** na dysku
-(File System Access API) — bez ręcznego eksportu/importu co sesję. Plik jest kanonem;
-localStorage trzyma kopię awaryjną. Wskazanie pliku robisz **raz** (patrz część A),
-a uchwyt do niego pamięta nawet przeglądarka po odświeżeniu.
+Panel otwierasz z linku, a **dane zapisują się same do wskazanego folderu** na dysku —
+bez ręcznego eksportu co sesję i bez instalowania czegokolwiek. Folder jest kanonem;
+w środku panel trzyma `inwentaryzacja.json` i podfolder `backups/` z kopiami dziennymi.
+Folder wskazujesz **raz** (część A) — przeglądarka pamięta go po odświeżeniu.
 
 > Auto-zapis działa w **Chrome/Edge** na `http://localhost` (lub https). W innych
 > przeglądarkach (np. Firefox) panel wraca do trybu ręcznego eksportu/importu JSON —
@@ -21,24 +21,25 @@ a uchwyt do niego pamięta nawet przeglądarka po odświeżeniu.
 
 ## CZĘŚĆ A. Uruchomienie panelu (raz na stanowisku)
 
-1. Zainstaluj **Node.js 18+** (jeśli nie ma).
-2. W folderze projektu uruchom raz:
-   ```bash
-   npm install
-   ```
-3. Wystartuj panel:
-   ```bash
-   npm run dev
-   ```
-4. Otwórz w przeglądarce adres, który wypisze (domyślnie **http://localhost:5173**).
-   Panel zostaw otwarty na czas pracy.
-5. **Raz** kliknij u góry **„Utwórz plik danych"** i wskaż miejsce na plik (np.
-   `inwentaryzacja.json` w folderze chmury/Dropbox dla automatycznej kopii). Od tej pory
-   każda zmiana zapisuje się tam sama — badge u góry pokazuje **„Zapisywane do … ✓"**.
-   - Następnym razem, jeśli przeglądarka poprosi o zgodę, kliknij **„Wznów zapis do pliku"**.
-   - Masz już plik z poprzedniej sesji? Użyj **„Otwórz plik danych"** zamiast „Utwórz".
-6. **Raz:** zakładka **Ustawienia** → wpisz **nazwę klubu** (trafia do nagłówka pliku
+1. Otwórz w **Chrome lub Edge**:
+   **https://arielkuzminski.github.io/glofox-inwentaryzacja/**
+   (dodaj do zakładek — to cały „instalator”). Panel zostaw otwarty na czas pracy.
+2. **Raz** kliknij u góry **„Wybierz folder danych"** i wskaż folder na dysku, np.
+   `Dokumenty\Inwentaryzacja` (może być w OneDrive/Dropbox — wtedy masz jeszcze kopię
+   w chmurze). Od tej pory każda zmiana zapisuje się tam sama, a badge u góry pokazuje
+   **„Zapisywane do folderu … ✓"**.
+   - W folderze powstaną: `inwentaryzacja.json` (bieżące dane) i `backups/`
+     (kopie dzienne, ostatnie 8).
+   - Następnym razem, jeśli przeglądarka poprosi o zgodę, kliknij
+     **„Wznów zapis do folderu"**.
+   - Masz już folder z poprzedniej sesji albo z innego komputera? Wskaż go tym samym
+     przyciskiem — panel wczyta to, co w nim jest.
+3. **Raz:** zakładka **Ustawienia** → wpisz **nazwę klubu** (trafia do nagłówka pliku
    dla sieci), **próg krótkiej daty** (domyślnie 30 dni) i **domyślną tolerancję** spisu.
+
+> **Firefox/Safari** nie umieją zapisywać do folderu. Panel tam działa, ale dane
+> siedzą tylko w przeglądarce — wymiana i kopie idą przez „Eksportuj kopię (JSON)”
+> i „Importuj”.
 
 > Panel i Glofox to dwie różne karty — panel **nie łączy się** z Glofox sam. Dane
 > przenosisz plikiem `snapshot.json` (część B).
@@ -71,7 +72,7 @@ Potem za każdym razem:
 
 ## CZĘŚĆ C. Pierwsza inwentaryzacja (stan bazowy)
 
-1. Upewnij się, że masz podłączony plik danych (część A, krok 5) — badge „Zapisywane do … ✓".
+1. Upewnij się, że masz podpięty folder danych (część A, krok 2) — badge „Zapisywane do folderu … ✓".
 2. Kliknij u góry **„Importuj snapshot z bookmarkletu"** i wskaż `glofox-snapshot-...json`.
 3. Zakładka **Stan / Snapshoty** — sprawdź, że produkty i stany się wczytały
    (wyszukiwarka po nazwie lub kodzie EAN).
@@ -181,10 +182,32 @@ W zakładce **Spis (audyt)** (albo później w **Raporcie**, przy zapisanym audy
 
 ---
 
+## CZĘŚĆ E5. Kopie zapasowe i drugi komputer
+
+**Kopie robią się same.** Przy pierwszym zapisie danego dnia panel odkłada
+`backups/inwentaryzacja-RRRR-MM-DD.json` i trzyma **8 ostatnich**. Przycisk
+**„Zrób kopię teraz"** wymusza kopię poza kolejnością (nadpisuje dzisiejszą).
+
+**Chcesz wrócić do stanu sprzed tygodnia?** Kliknij **„Importuj"**, wskaż plik
+z `backups/` — panel **scali** go z bieżącym stanem (nic nie przepadnie).
+
+**Praca na dwóch komputerach (np. recepcja + biuro):**
+1. Na komputerze A: **„Eksportuj kopię (JSON)"** albo po prostu skopiuj
+   `inwentaryzacja.json` z folderu danych (pendrive, OneDrive, mail).
+2. Na komputerze B: **„Importuj"** i wskaż ten plik.
+3. Panel pokaże, co doszło: *„Scalono plik z 2026-08-30: +280 zdarzeń, +1 audytów,
+   +3 partie"*. Praca z obu komputerów jest razem — nic się nie nadpisuje.
+4. Ten sam plik możesz zaimportować drugi raz; wyjdzie **+0 zdarzeń**.
+
+> Jedyny wyjątek: partia z krótką datą **wycofana** na jednym komputerze zostaje
+> wycofana po scaleniu (import starszego pliku nie „wskrzesi” zdjętego towaru).
+
+---
+
 ## CZĘŚĆ F. Następny raz
 
-1. Otwórz panel (część A, krok 3). Jeśli badge pokazuje **„Wznów zapis do pliku"** —
-   kliknij go (przeglądarka prosi o zgodę na zapis). Dane wczytają się z pliku same.
+1. Otwórz link do panelu. Jeśli badge pokazuje **„Wznów zapis do folderu"** —
+   kliknij go (przeglądarka prosi o zgodę). Dane wczytają się z folderu same.
 2. Dalej normalnie: pobierz snapshot (B), dostawy (D), spis (E), daty ważności (E2),
    zamówienia (E3), plik dla sieci (E4). Nic nie eksportujesz „na zapas” — wszystko
    zapisuje się na bieżąco do pliku danych.
@@ -214,7 +237,9 @@ W zakładce **Spis (audyt)** (albo później w **Raporcie**, przy zapisanym audy
   — wyloguj się i zaloguj ponownie do Glofox.
 - **Pusto po imporcie** → zaimportowano zły plik. Snapshot zaczyna się od `capturedAt`,
   raport od `generatedAt`. Panel sam rozpoznaje typ — sprawdź komunikat u góry.
-- **Stary stan po odświeżeniu** → to autosave (localStorage). „Wyczyść stan" zaczyna od zera
-  (najpierw wyeksportuj raport, jeśli chcesz go zachować!).
-- **Spis robisz na kilku stanowiskach** → moduł działa na jednym. Każde stanowisko ma własny
-  autosave; scalanie tylko przez ręczny eksport/import raportów.
+- **Stary stan po odświeżeniu** → to kopia awaryjna z przeglądarki. „Wyczyść stan" zaczyna
+  od zera (najpierw zrób kopię, jeśli chcesz go zachować!).
+- **Spis na kilku stanowiskach** → licz, gdzie chcesz, a potem przenieś plik i zaimportuj —
+  panel scala pracę z obu komputerów (część E5).
+- **Nie widzę przycisku „Wybierz folder danych"** → jesteś w Firefoksie/Safari. Wejdź
+  w Chrome lub Edge, albo pracuj na eksporcie/imporcie JSON.
