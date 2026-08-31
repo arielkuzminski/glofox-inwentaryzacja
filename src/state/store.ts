@@ -149,32 +149,45 @@ export function useReport() {
   const replace = useCallback((r: ReportState) => setReport(r), []);
 
   /**
-   * Wskazanie folderu danych. Jest w nim `inwentaryzacja.json`? To on jest kanonem.
-   * Nie ma? Zakładamy go z bieżącego stanu.
+   * Bierze folder na stan roboczy. Treść folderu NIE MOŻE skasować tego, co
+   * menadżer zdążył zrobić w pamięci (np. zaimportował snapshot przed kliknięciem
+   * „Wznów zapis") — dlatego pusty stan przyjmuje folder, a niepusty się z nim scala.
+   * Scalony wynik od razu utrwalamy, żeby folder nie został z niepełną historią.
    */
+  const adoptFolder = useCallback(
+    async (handle: DataDirHandle, loaded: ReportState | null) => {
+      const next =
+        loaded === null
+          ? report
+          : isPristine(report)
+            ? loaded
+            : mergeReports(report, loaded).report;
+      setReport(next);
+      await writeReportToDir(handle, next);
+      await saveHandle(handle);
+      await attach(handle);
+    },
+    [report, attach],
+  );
+
+  /** Wskazanie folderu danych (nowego albo istniejącego). */
   const connectDirectory = useCallback(async () => {
     try {
       const handle = await pickDataDirectory();
       if (!(await ensurePermission(handle, true))) return;
-      const existing = await readReportFromDir(handle);
-      if (existing) setReport(existing);
-      else await writeReportToDir(handle, report);
-      await saveHandle(handle);
-      await attach(handle);
+      await adoptFolder(handle, await readReportFromDir(handle));
     } catch (e) {
       if (!isAbort(e)) throw e;
     }
-  }, [report, attach]);
+  }, [adoptFolder]);
 
   /** Wznawia zapis do folderu z poprzedniej sesji (wymaga gestu użytkownika). */
   const reconnect = useCallback(async () => {
     const handle = dirRef.current;
     if (!handle) return;
     if (!(await ensurePermission(handle, true))) return;
-    const loaded = await readReportFromDir(handle);
-    if (loaded) setReport(loaded);
-    await attach(handle);
-  }, [attach]);
+    await adoptFolder(handle, await readReportFromDir(handle));
+  }, [adoptFolder]);
 
   /** Odłącza folder (dane zostają w pamięci i w kopii awaryjnej). */
   const disconnect = useCallback(async () => {
