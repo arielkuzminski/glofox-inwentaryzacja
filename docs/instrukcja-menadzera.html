@@ -1,0 +1,673 @@
+<title>Niedzielny spis w klubie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    /* Grunt: papier paragonu w świetlówce recepcji. Szarości z zielonym biasem. */
+    --ground: #f4f6f4;
+    --surface: #ffffff;
+    --surface-sunk: #ecefec;
+    --ink: #14181a;
+    --ink-soft: #4a534e;
+    --ink-faint: #767f79;
+    --rule: #d8ded9;
+    --rule-strong: #b9c2bc;
+
+    --accent: #1f6f5c;          /* pine — ewidencja, księga */
+    --accent-soft: #e4efea;
+    --danger: #a8322a;          /* manko */
+    --danger-soft: #f7e6e3;
+    --warn: #9a5c07;            /* pułapki */
+    --warn-soft: #f9eeda;
+
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+
+    --measure: 34rem;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0f1311;
+      --surface: #161b18;
+      --surface-sunk: #1c221e;
+      --ink: #e7ebe8;
+      --ink-soft: #a7b1aa;
+      --ink-faint: #7d8781;
+      --rule: #2a322d;
+      --rule-strong: #3c453f;
+
+      --accent: #58b79c;
+      --accent-soft: #16302a;
+      --danger: #e0847a;
+      --danger-soft: #33201d;
+      --warn: #d59b46;
+      --warn-soft: #2e2415;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0f1311;
+    --surface: #161b18;
+    --surface-sunk: #1c221e;
+    --ink: #e7ebe8;
+    --ink-soft: #a7b1aa;
+    --ink-faint: #7d8781;
+    --rule: #2a322d;
+    --rule-strong: #3c453f;
+
+    --accent: #58b79c;
+    --accent-soft: #16302a;
+    --danger: #e0847a;
+    --danger-soft: #33201d;
+    --warn: #d59b46;
+    --warn-soft: #2e2415;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  /* ---------- typografia ---------- */
+  h1, h2, h3, .eyebrow, .num, th, .pill, .btn {
+    font-family: var(--sans);
+  }
+  h1 {
+    font-size: clamp(2rem, 6vw, 2.9rem);
+    line-height: 1.06;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.32rem;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin: 0;
+  }
+  p { margin: 0; max-width: var(--measure); }
+  ul { margin: 0; padding-left: 1.15rem; max-width: var(--measure); }
+  li + li { margin-top: 0.4rem; }
+  strong { font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.08em 0.32em;
+    word-break: break-word;
+  }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  .section-head { display: flex; flex-direction: column; gap: 0.3rem; }
+
+  /* ---------- nagłówek ---------- */
+  header { display: flex; flex-direction: column; gap: 1.4rem; }
+  .lede {
+    font-size: 1.12rem;
+    color: var(--ink-soft);
+    max-width: 32rem;
+  }
+  .btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    background: var(--accent);
+    color: var(--ground);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.94rem;
+    padding: 0.6rem 1rem;
+    border-radius: 4px;
+  }
+  .btn span { font-family: var(--mono); font-size: 0.8rem; opacity: 0.8; }
+
+  /* ---------- pętla tygodniowa: numeracja jest prawdziwa ---------- */
+  .loop { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+  .step {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0 1rem;
+    padding: 1.15rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .num {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    padding-top: 0.05rem;
+  }
+  .step-body { display: flex; flex-direction: column; gap: 0.35rem; }
+  .step p { color: var(--ink-soft); font-size: 0.97rem; }
+  .step.optional .num { color: var(--ink-faint); }
+  .tag {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    margin-left: 0.5rem;
+    vertical-align: 0.12em;
+    white-space: nowrap;
+  }
+
+  /* ---------- kartki uwag ---------- */
+  .note {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .note p { font-size: 0.96rem; }
+
+  /* ---------- tabele ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 33rem; }
+  th, td {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    font-size: 0.93rem;
+  }
+  th {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-sunk);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.when { font-family: var(--mono); font-size: 0.84rem; white-space: nowrap; color: var(--ink-soft); }
+  td .formula { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-faint); display: block; margin-top: 0.15rem; }
+
+  .pill {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.12rem 0.45rem;
+    border-radius: 3px;
+  }
+  .pill.bad { background: var(--danger-soft); color: var(--danger); }
+  .pill.watch { background: var(--warn-soft); color: var(--warn); }
+  .pill.ok { background: var(--accent-soft); color: var(--accent); }
+  .pill.none { background: var(--surface-sunk); color: var(--ink-faint); border: 1px solid var(--rule); }
+
+  /* ---------- pułapki ---------- */
+  .traps { display: flex; flex-direction: column; gap: 0.7rem; counter-reset: trap; }
+  .trap {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 0.85rem 1rem;
+  }
+  .trap::before {
+    counter-increment: trap;
+    content: "✕";
+    font-family: var(--sans);
+    font-weight: 700;
+    color: var(--warn);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .trap div { display: flex; flex-direction: column; gap: 0.25rem; }
+  .trap p { font-size: 0.93rem; color: var(--ink-soft); }
+
+  /* ---------- dwie kolumny ---------- */
+  .two {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.9rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .card p, .card ul { font-size: 0.93rem; color: var(--ink-soft); max-width: none; }
+
+  .filetree {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.85;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    color: var(--ink-soft);
+    white-space: pre;
+  }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.4rem;
+    color: var(--ink-faint);
+    font-size: 0.88rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  footer p { max-width: none; }
+
+  @media (max-width: 30rem) {
+    .page { padding: 2.25rem 1.15rem 3.5rem; gap: 2.5rem; }
+    .step { grid-template-columns: 1.9rem 1fr; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div>
+      <p class="eyebrow">Xtreme Fitness Gym · sklep w recepcji</p>
+      <h1>Niedzielny spis w klubie</h1>
+    </div>
+    <p class="lede">
+      Jedna pętla tygodniowa: policz towar, oddaj plik sieci, zamów braki.
+      Kolejność w tej pętli nie jest kosmetyczna — decyduje o tym, czy manko na końcu
+      znaczy „ktoś rozdaje towar”, czy tylko „kliknąłem w złej kolejności”.
+    </p>
+    <a class="btn" href="https://arielkuzminski.github.io/glofox-inwentaryzacja/">
+      Otwórz panel <span>Chrome / Edge</span>
+    </a>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Niedziela · sklep zamknięty</p>
+      <h2>Pętla tygodniowa</h2>
+    </div>
+    <p>
+      Rób te kroki jeden po drugim, bez przerw na sprzedaż. Najlepiej po zamknięciu
+      albo przed otwarciem klubu.
+    </p>
+
+    <div class="loop">
+      <div class="step">
+        <div class="num">1</div>
+        <div class="step-body">
+          <h3>Snapshot — zawsze pierwszy</h3>
+          <p>
+            Na karcie <code>app.glofox.com</code> kliknij zakładkę
+            <strong>Glofox → snapshot</strong> z paska zakładek. Pobierze się plik.
+            Wróć do panelu i kliknij <strong>Importuj snapshot z bookmarkletu</strong>.
+            Snapshot zamraża stan Glofoxa w tej sekundzie — właśnie względem niego
+            policzy się manko.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">2</div>
+        <div class="step-body">
+          <h3>Spis z natury</h3>
+          <p>
+            Zakładka <strong>Spis</strong>. Skanuj kod z produktu i wpisuj policzone
+            sztuki — Enter przechodzi dalej. Licz wszystko: recepcja, lodówka, magazynek.
+            Spis zapisuje się na bieżąco, więc możesz przerwać i wrócić.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div class="step-body">
+          <h3>Oddaj wynik sieci</h3>
+          <p>
+            <strong>Zapisz audyt do raportu</strong> (zamraża wynik jako dowód), potem
+            <strong>Wzór sieci (XLSX)</strong>. Dostajesz gotowy plik w układzie
+            „WZÓR INWENTARYZACJA” — z nazwą klubu i datą w nagłówku.
+          </p>
+        </div>
+      </div>
+
+      <div class="step optional">
+        <div class="num">4</div>
+        <div class="step-body">
+          <h3>Krótkie daty <span class="tag">opcjonalnie</span></h3>
+          <p>
+            Drugie przejście po półkach: zakładka <strong>Daty ważności</strong>,
+            wpisz datę z opakowania i ilość. Wchodzą do kolumn F i G pliku sieci.
+          </p>
+        </div>
+      </div>
+
+      <div class="step optional">
+        <div class="num">5</div>
+        <div class="step-body">
+          <h3>Zamówienia <span class="tag">opcjonalnie</span></h3>
+          <p>
+            Zakładka <strong>Zamówienia</strong> pokaże zużycie tygodniowe i ile domówić
+            do minimum. Pokrycie poniżej jednego tygodnia na czerwono znaczy: skończy się
+            przed następną niedzielą.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">W ciągu tygodnia</p>
+      <h2>Dostawa — dwa miejsca, ten sam dzień</h2>
+    </div>
+    <div class="two">
+      <div class="card">
+        <h3>Do Glofoxa</h3>
+        <p>
+          W <strong>dniu przyjęcia</strong>, nie w niedzielę. Glofox jest księgą główną
+          klubu — jeśli towar stoi na półce, a w systemie go nie ma, spis pokaże
+          fałszywą nadwyżkę.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Do panelu → Dostawy</h3>
+        <p>
+          Nazwa lub kod z faktury, ilość, <strong>data z faktury</strong>, a w notatce
+          numer faktury. To niezależna kontrola: jeśli liczby się rozjadą, wyłapie to
+          rozbieżność księgowa.
+        </p>
+      </div>
+    </div>
+    <div class="note">
+      <p>
+        Pomyłka? W historii dostaw kliknij <strong>cofnij</strong> — dopisze korektę,
+        a ślad w ewidencji zostanie. Nic nie znika bez śladu.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Czego się spodziewać</p>
+      <h2>Co dostajesz i od kiedy</h2>
+    </div>
+    <p>
+      Pierwszy tydzień to stan bazowy i pierwsze manko. Reszta analityki potrzebuje
+      dwóch punktów w czasie, więc rusza od drugiego spisu.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Sygnał</th>
+            <th>Od kiedy</th>
+            <th>Skąd się bierze</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Manko</strong> — brakuje na półce</td>
+            <td class="when">1. spis</td>
+            <td>Fizyczna prawda o ubytku.<span class="formula">stan Glofox − policzone</span></td>
+          </tr>
+          <tr>
+            <td><strong>Rozbieżność księgowa</strong></td>
+            <td class="when">2. spis</td>
+            <td>Błąd ewidencji w samym Glofoxie.<span class="formula">stan − (poprz. + dostawy − sprzedaż)</span></td>
+          </tr>
+          <tr>
+            <td><strong>Zużycie tygodniowe</strong> i zamówienia</td>
+            <td class="when">2. spis</td>
+            <td>Sprzedaż między dwoma snapshotami, przeliczona na 7 dni.</td>
+          </tr>
+          <tr>
+            <td><strong>Powtarzające się manka</strong></td>
+            <td class="when">2. spis</td>
+            <td>Ten sam produkt ponad progiem dwa razy z rzędu — najmocniejszy sygnał.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p>
+        <strong>Dlaczego powtarzalność waży najwięcej:</strong> pomyłka w liczeniu
+        zdarza się raz. Jeśli ten sam produkt znika trzy niedziele z rzędu, to nie
+        pomyłka — sprawdź w zakładce <strong>Sprzedaż</strong>, kto stał na kasie.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Pułapki</p>
+      <h2>Czego nie robić</h2>
+    </div>
+    <div class="traps">
+      <div class="trap">
+        <div>
+          <h3>Snapshot w trakcie liczenia</h3>
+          <p>Każda sprzedaż między snapshotem a policzeniem półki wygląda jak manko. Zamknięty sklep, snapshot, spis — bez przerw.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Dostawa wbita do Glofoxa w niedzielę</h3>
+          <p>Towar leży na półce od czwartku, snapshot go nie widzi → wyjdzie fałszywa nadwyżka. Wbijaj w dniu przyjęcia.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Dostawa tylko w jednym miejscu</h3>
+          <p>Tylko w Glofoxie albo tylko w panelu — rozbieżność księgowa skacze bez powodu. Zawsze oba.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Zera w niepoliczonych pozycjach</h3>
+          <p>Niepoliczona pozycja ma zostać z „—”. Zero znaczy „policzyłem i nie ma ani jednej sztuki”.</p>
+        </div>
+      </div>
+      <div class="trap">
+        <div>
+          <h3>Ręczne poprawianie znaku w pliku sieci</h3>
+          <p>W panelu manko <strong>dodatnie</strong> = brakuje. W pliku sieci „Różnica” <strong>ujemna</strong> = brakuje. Eksport przelicza to sam.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Jak czytać wynik</p>
+      <h2>Sygnały w tabeli spisu</h2>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Co widzisz</th>
+            <th>Co to znaczy</th>
+            <th>Co zrobić</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill bad">manko +</span></td>
+            <td>Na półce jest mniej, niż mówi Glofox.</td>
+            <td>Realny ubytek: rozdawanie, kradzież, stłuczka albo błąd liczenia.</td>
+          </tr>
+          <tr>
+            <td><span class="pill watch">manko −</span></td>
+            <td>Na półce jest więcej, niż mówi Glofox.</td>
+            <td>Niewbita sprzedaż albo niewprowadzona dostawa.</td>
+          </tr>
+          <tr>
+            <td><span class="pill watch">rozb. ≠ 0</span></td>
+            <td>Stan w Glofoxie ruszył inaczej, niż wynika z dostaw i sprzedaży.</td>
+            <td>Ktoś ręcznie poprawiał stan w Glofoxie albo zrobił write-off.</td>
+          </tr>
+          <tr>
+            <td><span class="pill none">brak wpisu</span></td>
+            <td>Pozycji nie policzono w tym spisie.</td>
+            <td>Nic. Nie wpisuj tam zera.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Raz na stanowisku</p>
+      <h2>Pierwsze uruchomienie</h2>
+    </div>
+    <div class="loop">
+      <div class="step">
+        <div class="num">A</div>
+        <div class="step-body">
+          <h3>Wskaż folder danych</h3>
+          <p>
+            W panelu: <strong>Wybierz folder danych</strong> → np.
+            <code>Dokumenty\Inwentaryzacja</code>. Może leżeć w OneDrive — wtedy masz
+            dodatkowo kopię w chmurze. Przeglądarka zapyta o zgodę na edycję folderu.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">B</div>
+        <div class="step-body">
+          <h3>Uzupełnij Ustawienia</h3>
+          <p>
+            Nazwa klubu (trafia do nagłówka pliku sieci), próg krótkiej daty
+            (domyślnie 30 dni) i domyślna tolerancja spisu.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">C</div>
+        <div class="step-body">
+          <h3>Przeciągnij bookmarklet</h3>
+          <p>
+            Zakładka <strong>Pobierz dane</strong> → <strong>przeciągnij</strong> przycisk
+            „Glofox → snapshot” na <strong>pasek zakładek</strong>
+            (<code>Ctrl+Shift+B</code>, jeśli schowany).
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="note warn">
+      <h3>To pasek zakładek, nie pasek adresu</h3>
+      <p>
+        Chrome wycina <code>javascript:</code> z paska adresu, więc tamtą drogą nie
+        zadziała. I nie klikaj tego przycisku w panelu — na naszej stronie nie ma tokenu
+        Glofoxa, więc skrypt poprosi o token bez sensu. Klikasz go dopiero na karcie
+        <code>app.glofox.com</code>, zalogowany jako admin.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow">Dane i bezpieczeństwo</p>
+      <h2>Gdzie to wszystko siedzi</h2>
+    </div>
+    <p>
+      Panel nie ma serwera — dane klubu nigdy nie wychodzą z twojego dysku.
+      W wskazanym folderze panel trzyma bieżący stan i kopie dzienne:
+    </p>
+    <div class="filetree">Inwentaryzacja\
+  inwentaryzacja.json                  ← bieżące dane, zapis automatyczny
+  backups\
+    inwentaryzacja-2026-08-31.json     ← kopia dnia
+    inwentaryzacja-2026-08-24.json        (trzymamy 8 ostatnich)</div>
+    <div class="two">
+      <div class="card">
+        <h3>Powrót do starszego stanu</h3>
+        <p>
+          <strong>Importuj</strong> → wskaż plik z <code>backups\</code>. Panel scali go
+          z bieżącym stanem, więc nic nie przepadnie.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Dwa komputery</h3>
+        <p>
+          Skopiuj <code>inwentaryzacja.json</code> i zaimportuj na drugim. Panel powie,
+          co doszło („+280 zdarzeń”). Praca z obu stanowisk jest razem — nic się nie
+          nadpisuje.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Panel działa w Chrome i Edge. W Firefoksie i Safari brakuje zapisu do folderu —
+      wszystko inne działa, ale kopie robisz ręcznie przez „Eksportuj kopię (JSON)”.
+    </p>
+    <p>
+      Zasada nadrzędna: <strong>manko = stan w Glofoxie − policzony stan z półki</strong>.
+      Darmowe rozdawanie towaru jest dla Glofoxa niewidoczne, więc bez fizycznego
+      policzenia nie wykryjesz go w żaden inny sposób.
+    </p>
+  </footer>
+
+</div>

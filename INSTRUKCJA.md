@@ -9,13 +9,71 @@ bez ręcznego eksportu co sesję i bez instalowania czegokolwiek. Folder jest ka
 w środku panel trzyma `inwentaryzacja.json` i podfolder `backups/` z kopiami dziennymi.
 Folder wskazujesz **raz** (część A) — przeglądarka pamięta go po odświeżeniu.
 
-> Auto-zapis działa w **Chrome/Edge** na `http://localhost` (lub https). W innych
-> przeglądarkach (np. Firefox) panel wraca do trybu ręcznego eksportu/importu JSON —
-> wszystko działa, tylko zapis nie jest automatyczny.
+> Auto-zapis do folderu działa w **Chrome/Edge**. W innych przeglądarkach (Firefox,
+> Safari) panel działa, ale zapis idzie ręcznie przez „Eksportuj kopię (JSON)".
 
 > Zasada nadrzędna: **manko = stan w Glofox − policzony stan z półki.** Darmowe rozdawanie
 > jest niewidoczne dla Glofox (stan zostaje zawyżony), więc bez fizycznego policzenia
 > towaru nic nie wykryjesz. Snapshoty i sprzedaża są tylko wsparciem.
+
+---
+
+## RYTM PRACY — co po czym (przeczytaj to raz)
+
+Cały proces to **jedna pętla tygodniowa** plus drobna robota w tygodniu.
+
+### Niedziela, sklep zamknięty (albo przed otwarciem)
+
+1. **Snapshot — ZAWSZE PIERWSZY.** Bookmarklet na `app.glofox.com`, potem
+   „Importuj snapshot" w panelu. Snapshot zamraża stan Glofoxa w tej sekundzie i to
+   względem niego liczy się manko.
+2. **Spis z natury.** Zakładka *Spis*: skanujesz EAN, wpisujesz policzone sztuki.
+3. **Zapisz audyt do raportu** → **Wzór sieci (XLSX)**. To jest to, co oddajesz sieci.
+4. *(opcjonalnie, drugie przejście po półkach)* **Daty ważności**.
+5. *(opcjonalnie)* **Zamówienia** — ile domówić przed poniedziałkiem.
+
+### W ciągu tygodnia
+
+Przyszła dostawa → wpisujesz ją w **dwóch miejscach**:
+- **do Glofoxa** (to jest księga główna klubu) — **w dniu przyjęcia**, nie w niedzielę,
+- **do panelu**, zakładka *Dostawy*: nazwa/EAN, ilość, **data z faktury**, w notatce
+  numer faktury.
+
+Nic więcej w tygodniu nie musisz robić.
+
+### Co dostajesz i od kiedy
+
+| Sygnał | Od kiedy działa | Skąd się bierze |
+|--------|-----------------|-----------------|
+| **Manko** (brakuje na półce) | już przy **pierwszym** spisie | `stan Glofox − policzone` |
+| **Rozbieżność księgowa** | od **drugiego** snapshotu | `stan teraz − (stan poprz. + dostawy − sprzedaż)` |
+| **Sprzedano w oknie**, **zużycie tygodniowe**, **Zamówienia** | od **drugiego** snapshotu | sprzedaż między dwoma snapshotami |
+| **Powtarzające się manka** | od **drugiego zapisanego audytu** | ten sam produkt ponad progiem dwa razy z rzędu |
+
+Czyli: **pierwszy tydzień** to stan bazowy i pierwsze manko. Od **drugiego tygodnia**
+dochodzi cała analityka — bo dopiero wtedy jest z czym porównywać.
+
+### Dlaczego kolejność ma znaczenie
+
+Manko to różnica między tym, co Glofox myśli, a tym, co leży na półce. Jeśli między
+snapshotem a policzeniem coś się sprzeda albo dojedzie dostawa, różnica przestaje mówić
+o ubytkach, a zaczyna mówić o twojej kolejności klikania. Dlatego: **zamknięty sklep,
+snapshot, spis — jedno po drugim, bez przerw.**
+
+---
+
+## CZEGO NIE ROBIĆ (pięć sposobów, żeby zepsuć wynik)
+
+1. **Snapshot w trakcie liczenia albo przy otwartym sklepie.** Każda sprzedaż między
+   snapshotem a policzeniem półki wygląda jak manko.
+2. **Dostawa wpisana do Glofoxa w niedzielę, a towar leży na półce od czwartku.**
+   Snapshot jej nie widzi, półka widzi → wyjdzie fałszywa **nadwyżka**.
+3. **Dostawa wpisana tylko w jedno miejsce.** Tylko w Glofoxie albo tylko u nas →
+   rozbieżność księgowa skacze bez powodu. Zawsze oba.
+4. **Wpisywanie zer w niepoliczone pozycje.** Niepoliczona pozycja ma manko „—", i tak
+   ma zostać. Zero znaczy „policzyłem i nie ma ani jednej sztuki”.
+5. **Ręczne poprawianie znaku w pliku dla sieci.** U nas manko **dodatnie** = brakuje;
+   w pliku sieci „Różnica” **ujemna** = brakuje. Eksport przelicza to sam.
 
 ---
 

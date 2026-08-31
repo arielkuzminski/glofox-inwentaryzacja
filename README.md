@@ -8,6 +8,11 @@ ubytków.
 **Panel działa z linku:** https://arielkuzminski.github.io/glofox-inwentaryzacja/ —
 menadżer klubu nie instaluje niczego.
 
+**Dokumentacja:** [`INSTRUKCJA.md`](INSTRUKCJA.md) to pełna instrukcja operacyjna
+(rytm tygodniowy, kolejność, pułapki, każda zakładka).
+[`docs/instrukcja-menadzera.html`](docs/instrukcja-menadzera.html) to ta sama treść
+w skróconej, czytelnej formie do wysłania menadżerowi klubu.
+
 ## Po co to (logika biznesowa)
 
 Moduł obsługuje **dwa cele naraz**:
