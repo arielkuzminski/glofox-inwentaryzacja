@@ -45,7 +45,7 @@ export function AuditView({
   const scanRef = useRef<HTMLInputElement>(null);
   const inputRefs = useRef(new Map<string, HTMLInputElement>());
 
-  // Źródło prawdy spisu = ledger (auto-zapis do pliku, przeżywa F5).
+  // Źródło prawdy spisu = ledger (auto-zapis do folderu danych, przeżywa F5).
   const ledgerCounts = useMemo(
     () => (source ? physicalCountMap(report.ledger, source) : new Map<string, number>()),
     [report.ledger, source],
@@ -426,7 +426,7 @@ export function AuditView({
         />
         <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
           Skan EAN ustawia fokus na polu spisu (tryb +1 = dolicza sztukę). Enter zatwierdza
-          i przechodzi dalej. Spis zapisuje się na bieżąco do pliku — F5 nic nie kasuje.
+          i przechodzi dalej. Spis zapisuje się na bieżąco — F5 nic nie kasuje.
           Manko dodatnie = brakuje na półce. Rozbieżność księgowa ≠ 0 = stan w Glofox ruszył
           inaczej niż wynika z dostaw i sprzedaży.
         </p>

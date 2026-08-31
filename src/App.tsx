@@ -105,7 +105,7 @@ export function App() {
       <h1>Glofox — Inwentaryzacja</h1>
       <p className="subtitle">
         Spis, krótkie daty, zamówienia i kontrola ubytków w jednym miejscu. Manko =
-        stan Glofox − spis z natury. Dane zapisują się same do wybranego pliku.
+        stan Glofox − spis z natury. Dane zapisują się same do wybranego folderu.
       </p>
 
       <div className="panel">
