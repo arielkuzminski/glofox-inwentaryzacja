@@ -52,8 +52,13 @@ Robisz to za każdym razem, gdy chcesz świeży stan + sprzedaż (np. przy każd
 i przy każdym spisie).
 
 **Raz na stanowisku:** wejdź w panelu na zakładkę **„Pobierz dane"** i **przeciągnij**
-przycisk **„Glofox → snapshot"** na pasek zakładek przeglądarki
+przycisk **„Glofox → snapshot"** na **pasek zakładek** przeglądarki
 (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>, jeśli pasek schowany).
+
+> **Uwaga:** to **pasek zakładek**, nie pasek adresu — Chrome wycina `javascript:`
+> z paska adresu. I **nie klikaj** tego przycisku w naszym panelu: na tej stronie nie ma
+> tokenu Glofoxa, więc skrypt poprosi o token bez sensu. Klikasz go dopiero
+> **na karcie `app.glofox.com`**.
 
 Potem za każdym razem:
 1. Zaloguj się na **https://app.glofox.com** jako **ADMIN** → dashboard → **Store**.

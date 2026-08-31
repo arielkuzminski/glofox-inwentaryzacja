@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { BOOKMARKLET } from "../bridge/bookmarklet.generated";
 
 // Zakładka „Pobierz dane": przeciągany bookmarklet zamiast wklejania do konsoli co cykl.
 export function BridgeView() {
+  const [clicked, setClicked] = useState(false);
+
   return (
     <>
       <div className="panel">
@@ -16,14 +19,37 @@ export function BridgeView() {
           <li>
             <strong>Przeciągnij ten przycisk na pasek zakładek</strong> (raz):
             <div style={{ marginTop: 8, marginBottom: 8 }}>
-              <a className="bookmarklet" href={BOOKMARKLET}>
+              {/*
+                Kliknięcie TU odpalałoby bookmarklet na naszej stronie, gdzie nie ma
+                tokenu Glofoxa — użytkownik dostawał wtedy mylące „potrzebuję świeżego
+                tokenu" i szukał błędu w imporcie. href zostaje (bez niego nie da się
+                przeciągnąć), ale klik blokujemy i tłumaczymy, co zrobić.
+              */}
+              <a
+                className="bookmarklet"
+                href={BOOKMARKLET}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setClicked(true);
+                }}
+              >
                 Glofox → snapshot
               </a>
             </div>
             <span className="muted">
-              Pasek zakładek: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>. Kliknięcie
-              tutaj nic nie zrobi — link trzeba <em>przeciągnąć</em>.
+              Pasek <strong>zakładek</strong> (nie pasek adresu — Chrome wycina z niego{" "}
+              <code>javascript:</code>): <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.
+              Link trzeba <em>przeciągnąć</em>, a potem kliknąć{" "}
+              <strong>na karcie Glofoxa</strong>.
             </span>
+            {clicked && (
+              <p className="warn" style={{ marginTop: 8, marginBottom: 0 }}>
+                <strong>Nie klikaj go tutaj</strong> — na tej stronie nie ma tokenu
+                Glofoxa, więc skrypt poprosiłby o niego bez sensu. Przeciągnij ten
+                przycisk na pasek zakładek, wejdź na <code>app.glofox.com</code>{" "}
+                (zalogowany jako admin) i kliknij zakładkę <em>tam</em>.
+              </p>
+            )}
           </li>
           <li>
             Zaloguj się na <code>app.glofox.com</code> jako <strong>admin</strong> →
